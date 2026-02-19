@@ -135,6 +135,15 @@
 		document.documentElement.classList.remove('bac', 'siampiwat');
 
 		// Load custom theme CSS and add class if needed
+		// Remove siampiwat mouse tracking if switching away
+		if (_theme !== 'siampiwat' && window._siampiwatMouseHandler) {
+			document.removeEventListener('mousemove', window._siampiwatMouseHandler);
+			document.removeEventListener('mouseleave', window._siampiwatMouseLeave);
+			document.documentElement.classList.remove('mouse-active');
+			window._siampiwatMouseHandler = null;
+			window._siampiwatMouseLeave = null;
+		}
+
 		if (_theme === 'bac') {
 			const link = document.createElement('link');
 			link.rel = 'stylesheet';
@@ -149,6 +158,22 @@
 			link.setAttribute('data-theme-css', 'true');
 			document.head.appendChild(link);
 			document.documentElement.classList.add('siampiwat');
+
+			// Mouse position glow animation
+			if (!window._siampiwatMouseHandler) {
+				window._siampiwatMouseHandler = (e) => {
+					document.documentElement.style.setProperty('--mouse-x', e.clientX + 'px');
+					document.documentElement.style.setProperty('--mouse-y', e.clientY + 'px');
+					if (!document.documentElement.classList.contains('mouse-active')) {
+						document.documentElement.classList.add('mouse-active');
+					}
+				};
+				window._siampiwatMouseLeave = () => {
+					document.documentElement.classList.remove('mouse-active');
+				};
+				document.addEventListener('mousemove', window._siampiwatMouseHandler);
+				document.addEventListener('mouseleave', window._siampiwatMouseLeave);
+			}
 		}
 	};
 

@@ -1,9 +1,25 @@
 
 
 .siampiwat #splash-screen {
-    background-color: #F8F6F0;
+    background-color: #382A4B;
 }
 
+.siampiwat .w-full.px-10.min-h-screen.flex.flex-col.text-center {
+    background-color: #F1EDE0;
+}
+
+.siampiwat .text-2xl.font-medium {
+    color: #B39A56;
+}
+
+.siampiwat .text-sm.font-medium.text-left.mb-1.block {
+    color: #B39A56;
+}
+
+.siampiwat .bg-gray-700\/5.hover\:bg-gray-700\/10.dark\:bg-gray-100\/5.dark\:hover\:bg-gray-100\/10.dark\:text-gray-300.dark\:hover\:text-white.transition.w-full.rounded-full.font-medium.text-sm.py-2\.5{
+    background-color: #382A4B;
+    color: #ffffff;
+}
 .siampiwat .bg-white {
     background-color: #F8F6F0;
 }
@@ -13,7 +29,7 @@
 }
 
 .siampiwat .w-full.px-4.py-3.bg-white.dark\:shadow-lg.dark\:bg-gray-850.z-40.pointer-events-auto.overflow-y-auto.scrollbar-hidden {
-    background-color: #403451;
+    background-color: #382A4B;
 }
 .siampiwat svg {
     color: #B39A56;
@@ -27,7 +43,7 @@
     color: #B39A56;
 }
 .siampiwat #sidebar {
-    background-color: #403451;
+    background-color: #382A4B;
 }
 
 .siampiwat .px-3\.5.py-1\.5.text-sm.font-medium.disabled\:bg-gray-50.dark\:disabled\:hover\:bg-gray-850.disabled\:cursor-not-allowed.bg-gray-50.hover\:bg-gray-100.text-gray-900.dark\:bg-gray-850.dark\:hover\:bg-gray-800.dark\:text-gray-200.transition.rounded-lg {
@@ -69,15 +85,15 @@
 
 
 .siampiwat .my-auto.flex.flex-col.justify-between.h-screen.max-h-\[100dvh\] {
-    background: #403451;
+    background: #382A4B;
 }
 
 .siampiwat .bg-black.text-white.hover\:bg-gray-900.dark\:bg-white.dark\:text-black.dark\:hover\:bg-gray-100.transition.rounded-full.p-1\.5.self-center{
-    background: #403451;
+    background: #382A4B;
 }
 
 .siampiwat .flex.w-full.items-center.gap-2.truncate.bg-transparent.px-0\.5.text-sm.placeholder-gray-400.outline-hidden.focus\:outline-hidden {
-    color: #403451;
+    color: #382A4B;
 }
 
 .siampiwat .sidebar-bg-gradient-to-t.bg-linear-to-t.from-gray-50.dark\:from-gray-950.to-transparent.from-50\%.pointer-events-none.absolute.inset-0.-z-10.-mt-6 {
@@ -89,7 +105,7 @@
 }
 
 .siampiwat .self-center.font-medium.text-sm {
-    color: #403451;
+    color: #382A4B;
 }
 
 .siampiwat .self-center.font-medium {
@@ -113,11 +129,11 @@
 }
 
 .siampiwat .bg-black {
-    background-color: #403451;
+    background-color: #382A4B;
 }
 
 .siampiwat .bg-gray-50 {
-    background-color: #403451;
+    background-color: #382A4B;
 }
 
 .siampiwat .bg-gray-50:hover {
@@ -129,7 +145,7 @@
 }
 
 .siampiwat .mb-1.w-full.px-3.py-1\.5.gap-1.rounded-xl.bg-gray-50.dark\:text-white.dark\:bg-gray-900\/50.text-black.transition.text-xs.flex.items-center.justify-center {
-    background-color: #403451;
+    background-color: #382A4B;
     color: #ffffff;
 }
 
