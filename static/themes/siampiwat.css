@@ -1,0 +1,166 @@
+
+
+.siampiwat #splash-screen {
+    background-color: #F8F6F0;
+}
+
+.siampiwat .bg-white {
+    background-color: #F8F6F0;
+}
+
+.siampiwat #chat-container {
+    background-color: #F8F6F0;
+}
+
+.siampiwat .w-full.px-4.py-3.bg-white.dark\:shadow-lg.dark\:bg-gray-850.z-40.pointer-events-auto.overflow-y-auto.scrollbar-hidden {
+    background-color: #403451;
+}
+.siampiwat svg {
+    color: #B39A56;
+}
+
+.siampiwat #message-input-container {
+    background-color: #ffffff;
+}
+
+.siampiwat .text-3xl.\@sm\:text-3xl.line-clamp-1.flex.items-center {
+    color: #B39A56;
+}
+.siampiwat #sidebar {
+    background-color: #403451;
+}
+
+.siampiwat .px-3\.5.py-1\.5.text-sm.font-medium.disabled\:bg-gray-50.dark\:disabled\:hover\:bg-gray-850.disabled\:cursor-not-allowed.bg-gray-50.hover\:bg-gray-100.text-gray-900.dark\:bg-gray-850.dark\:hover\:bg-gray-800.dark\:text-gray-200.transition.rounded-lg {
+    color: #ffffff;
+}
+
+.siampiwat .w-full.rounded-lg.py-1\.5.px-4.text-sm.bg-gray-50.dark\:text-gray-300.dark\:bg-gray-850.outline-hidden {
+    background-color: rgba(64, 52, 81, 0.10);
+}
+
+.siampiwat .w-full.rounded-lg.px-3\.5.py-2.text-sm.bg-gray-50.dark\:text-gray-300.dark\:bg-gray-850.outline-hidden.h-full {
+    background-color: rgba(64, 52, 81, 0.10);
+}
+
+.siampiwat .rounded-lg.w-full.py-2.px-3.text-sm.bg-gray-50.dark\:text-gray-300.dark\:bg-gray-850.outline-hidden {
+    background-color: rgba(64, 52, 81, 0.10);
+}
+
+.siampiwat .bg-gray-50.dark\:bg-gray-900.rounded-xl.border.border-gray-100\/50.dark\:border-gray-850\/50.flex-1.min-h-0.overflow-hidden.flex.flex-col {
+    background-color: rgba(64, 52, 81, 0.10);
+}
+
+.siampiwat .w-full.rounded-lg.py-2.px-4.text-sm.bg-gray-50.dark\:text-gray-300.dark\:bg-gray-850.outline-hidden {
+    background-color: rgba(64, 52, 81, 0.10);
+}
+
+.siampiwat .w-full.flex.items-center.rounded-xl.text-sm.py-2.px-3.hover\:bg-gray-50.dark\:hover\:bg-gray-850.bg-gray-50.dark\:bg-gray-850 {
+    background-color: transparent;
+}
+
+.siampiwat .w-full.flex.items-center.rounded-xl.text-sm.py-2.px-3.hover\:bg-gray-50.dark\:hover\:bg-gray-850.bg-gray-50.dark\:bg-gray-850:hover {
+    background-color: rgba(64, 52, 81, 0.15);
+}
+
+.siampiwat #sidebar-webui-name {
+    color: #B39A56;
+    font-size: 1.75rem;
+}
+
+
+.siampiwat .my-auto.flex.flex-col.justify-between.h-screen.max-h-\[100dvh\] {
+    background: #403451;
+}
+
+.siampiwat .bg-black.text-white.hover\:bg-gray-900.dark\:bg-white.dark\:text-black.dark\:hover\:bg-gray-100.transition.rounded-full.p-1\.5.self-center{
+    background: #403451;
+}
+
+.siampiwat .flex.w-full.items-center.gap-2.truncate.bg-transparent.px-0\.5.text-sm.placeholder-gray-400.outline-hidden.focus\:outline-hidden {
+    color: #403451;
+}
+
+.siampiwat .sidebar-bg-gradient-to-t.bg-linear-to-t.from-gray-50.dark\:from-gray-950.to-transparent.from-50\%.pointer-events-none.absolute.inset-0.-z-10.-mt-6 {
+    background: transparent;
+}
+
+.siampiwat .self-center.text-sm.font-primary {
+    color: #ffffff;
+}
+
+.siampiwat .self-center.font-medium.text-sm {
+    color: #403451;
+}
+
+.siampiwat .self-center.font-medium {
+    color: #ffffff;
+}
+
+.siampiwat .translate-y-\[0\.5px\].pl-0\.5 {
+    color: #ffffff;
+}
+
+.siampiwat #sidebar-new-chat-button:hover, #sidebar-search-button:hover, #sidebar-notes-button:hover, #sidebar-workspace-button:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+.siampiwat .flex.items-center.rounded-2xl.py-2.px-1\.5.w-full.hover\:bg-gray-100\/50.dark\:hover\:bg-gray-900\/50.transition:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+.siampiwat #sidebar-folder-button:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+.siampiwat .bg-black {
+    background-color: #403451;
+}
+
+.siampiwat .bg-gray-50 {
+    background-color: #403451;
+}
+
+.siampiwat .bg-gray-50:hover {
+    background-color: rgba(64, 52, 81, 0.15);
+}
+
+.siampiwat .flex.w-full.text-left.px-0\.5.bg-transparent.truncate.text-lg.justify-between.placeholder-gray-400 {
+    color: #B39A56;
+}
+
+.siampiwat .mb-1.w-full.px-3.py-1\.5.gap-1.rounded-xl.bg-gray-50.dark\:text-white.dark\:bg-gray-900\/50.text-black.transition.text-xs.flex.items-center.justify-center {
+    background-color: #403451;
+    color: #ffffff;
+}
+
+.siampiwat .mb-1.w-full.px-3.py-1\.5.gap-1.rounded-xl.bg-gray-50.dark\:text-white.dark\:bg-gray-900\/50.text-black.transition.text-xs.flex.items-center.justify-center:hover {
+    background-color: rgba(64, 52, 81, 0.5);
+}
+
+.siampiwat .text-lg.font-medium.self-center {
+    color: #B39A56;
+}
+
+.siampiwat .text-gray-700 {
+    color: #B39A56;
+}
+
+.siampiwat #models .text-xs.font-medium.mb-2  {
+    color: #B39A56;
+}
+
+.siampiwat .dark\:bg-gray-900.outline-none.bg-transparent.text-sm.font-medium.block.w-fit.pr-10.max-w-full.placeholder-gray-400 {
+    color: #B39A56;
+}
+
+.siampiwat .self-center.text-xs.font-medium {
+    color: #B39A56;
+}
+
+.siampiwat .text-sm.font-medium.shrink-0 {
+    color: #ffffff;
+}
+
+.siampiwat .placeholder-gray-400 {
+    color: #ffffff;
+}

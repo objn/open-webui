@@ -63,6 +63,16 @@
 				} else if (localStorage.theme === 'light') {
 					document.documentElement.classList.add('light');
 					metaThemeColorTag.setAttribute('content', '#ffffff');
+				} else if (localStorage.theme === 'siampiwat') {
+					// Load siampiwat theme CSS
+					const link = document.createElement('link');
+					link.rel = 'stylesheet';
+					link.href = '/themes/siampiwat.css';
+					link.setAttribute('data-theme-css', 'true');
+					document.head.appendChild(link);
+					// Apply light as base theme and add siampiwat class
+					document.documentElement.classList.add('light', 'siampiwat');
+					metaThemeColorTag.setAttribute('content', '#ffffff');
 				} else if (localStorage.theme === 'her') {
 					document.documentElement.classList.add('her');
 					metaThemeColorTag.setAttribute('content', '#983724');

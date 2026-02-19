@@ -14,7 +14,7 @@
 	export let getModels: Function;
 
 	// General
-	let themes = ['dark', 'light', 'oled-dark'];
+	let themes = ['dark', 'light', 'oled-dark', 'siampiwat'];
 	let selectedTheme = 'system';
 
 	let languages: Awaited<ReturnType<typeof getLanguages>> = [];
@@ -121,10 +121,42 @@
 
 		params = { ...params, ...$settings.params };
 		params.stop = $settings?.params?.stop ? ($settings?.params?.stop ?? []).join(',') : null;
+		
+		// Apply theme on mount (including custom themes like bac)
+		applyTheme(selectedTheme);
 	});
 
+	const loadThemeCSS = (_theme: string) => {
+		// Remove existing custom theme stylesheets
+		const existingThemeLinks = document.querySelectorAll('link[data-theme-css]');
+		existingThemeLinks.forEach((link) => link.remove());
+
+		// Remove custom theme classes
+		document.documentElement.classList.remove('bac', 'siampiwat');
+
+		// Load custom theme CSS and add class if needed
+		if (_theme === 'bac') {
+			const link = document.createElement('link');
+			link.rel = 'stylesheet';
+			link.href = '/themes/bac.css';
+			link.setAttribute('data-theme-css', 'true');
+			document.head.appendChild(link);
+			document.documentElement.classList.add('bac');
+		} else if (_theme === 'siampiwat') {
+			const link = document.createElement('link');
+			link.rel = 'stylesheet';
+			link.href = '/themes/siampiwat.css';
+			link.setAttribute('data-theme-css', 'true');
+			document.head.appendChild(link);
+			document.documentElement.classList.add('siampiwat');
+		}
+	};
+
 	const applyTheme = (_theme: string) => {
-		let themeToApply = _theme === 'oled-dark' ? 'dark' : _theme === 'her' ? 'light' : _theme;
+		// Load custom theme CSS first (adds/removes custom classes like 'siampiwat', 'bac')
+		loadThemeCSS(_theme);
+
+		let themeToApply = _theme === 'oled-dark' ? 'dark' : _theme === 'her' ? 'light' : _theme === 'bac' ? 'light' : _theme === 'siampiwat' ? 'light' : _theme;
 
 		if (_theme === 'system') {
 			themeToApply = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -137,12 +169,11 @@
 			document.documentElement.style.setProperty('--color-gray-950', '#0d0d0d');
 		}
 
-		themes
+		// Remove base theme classes (dark/light/oled-dark) but NOT custom theme classes
+		['dark', 'light', 'oled-dark']
 			.filter((e) => e !== themeToApply)
 			.forEach((e) => {
-				e.split(' ').forEach((e) => {
-					document.documentElement.classList.remove(e);
-				});
+				document.documentElement.classList.remove(e);
 			});
 
 		themeToApply.split(' ').forEach((e) => {
@@ -167,7 +198,9 @@
 							? '#000000'
 							: _theme === 'her'
 								? '#983724'
-								: '#ffffff'
+								: _theme === 'siampiwat'
+									? '#ffffff'
+									: '#ffffff'
 				);
 			}
 		}
@@ -214,6 +247,7 @@
 						<option value="dark">🌑 {$i18n.t('Dark')}</option>
 						<option value="oled-dark">🌃 {$i18n.t('OLED Dark')}</option>
 						<option value="light">☀️ {$i18n.t('Light')}</option>
+						<option value="siampiwat">✨ {$i18n.t('Siam-Piwat')}</option>
 						{#if $config?.features?.enable_easter_eggs}
 							<option value="her">🌷 Her</option>
 						{/if}
