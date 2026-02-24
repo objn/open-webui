@@ -25,6 +25,7 @@ from open_webui.env import ENABLE_FORWARD_USER_INFO_HEADERS
 
 from open_webui.models.chats import Chats
 from open_webui.routers.files import upload_file_handler, get_file_content_by_id
+from open_webui.integrations.bigquery_sync import sync_chat_file as bigquery_sync_chat_file
 from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.access_control import has_permission
 from open_webui.utils.headers import include_user_info_headers
@@ -527,13 +528,16 @@ def upload_image(request, image_data, content_type, metadata, user, db=None):
         message_id = metadata.get("message_id")
 
         if chat_id and message_id:
-            Chats.insert_chat_files(
+            chat_files = Chats.insert_chat_files(
                 chat_id=chat_id,
                 message_id=message_id,
                 file_ids=[file_item.id],
                 user_id=user.id,
                 db=db,
             )
+            if chat_files:
+                for cf in chat_files:
+                    bigquery_sync_chat_file(cf)
 
     url = request.app.url_path_for("get_file_content_by_id", id=file_item.id)
     return file_item, url

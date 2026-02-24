@@ -1,6 +1,7 @@
 import logging
 import os
-import uuid
+import random
+import string
 import json
 from pathlib import Path
 from typing import Optional
@@ -45,6 +46,8 @@ from open_webui.routers.retrieval import ProcessFileForm, process_file
 from open_webui.routers.audio import transcribe
 
 from open_webui.storage.provider import Storage
+from open_webui.config import STRUCTURED_DIR, UNSTRUCTURED_DIR
+from open_webui.integrations.bigquery_sync import sync_file as bigquery_sync_file
 
 
 from open_webui.utils.auth import get_admin_user, get_verified_user
@@ -118,6 +121,19 @@ def has_access_to_file(
 ############################
 # Upload File
 ############################
+
+# Structured file extensions: xlsx, xls, csv, ods
+STRUCTURED_EXTENSIONS = frozenset({"xlsx", "xls", "csv", "ods"})
+
+
+def _unique_file_id_32() -> str:
+    """Generate a random 32-char alphanumeric string (a-zA-Z0-9)."""
+    alphabet = string.ascii_letters + string.digits
+    return "".join(random.choices(alphabet, k=32))
+
+
+def _is_structured_extension(ext: str) -> bool:
+    return (ext or "").lower() in STRUCTURED_EXTENSIONS
 
 
 def process_uploaded_file(
@@ -260,19 +276,25 @@ def upload_file_handler(
                     ),
                 )
 
-        # replace filename with uuid
-        id = str(uuid.uuid4())
-        name = filename
-        filename = f"{id}_{filename}"
+        # Unique 32-char name + original extension; id = unique_name
+        id = _unique_file_id_32()
+        name = filename  # original name for display
+        storage_filename = f"{id}.{file_extension}" if file_extension else id
+        target_dir = (
+            STRUCTURED_DIR
+            if _is_structured_extension(file_extension)
+            else UNSTRUCTURED_DIR
+        )
         contents, file_path = Storage.upload_file(
             file.file,
-            filename,
+            storage_filename,
             {
                 "OpenWebUI-User-Email": user.email,
                 "OpenWebUI-User-Id": user.id,
                 "OpenWebUI-User-Name": user.name,
                 "OpenWebUI-File-Id": id,
             },
+            base_dir=target_dir,
         )
 
         file_item = Files.insert_new_file(
@@ -299,6 +321,12 @@ def upload_file_handler(
             ),
             db=db,
         )
+
+        if file_item:
+            if background_tasks:
+                background_tasks.add_task(bigquery_sync_file, file_item)
+            else:
+                bigquery_sync_file(file_item)
 
         if "channel_id" in file_metadata:
             channel = Channels.get_channel_by_id_and_user_id(

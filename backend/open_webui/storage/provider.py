@@ -4,7 +4,7 @@ import json
 import logging
 import re
 from abc import ABC, abstractmethod
-from typing import BinaryIO, Tuple, Dict
+from typing import BinaryIO, Optional, Tuple, Union, Dict
 
 import boto3
 from botocore.config import Config
@@ -26,6 +26,8 @@ from open_webui.config import (
     AZURE_STORAGE_KEY,
     STORAGE_PROVIDER,
     UPLOAD_DIR,
+    STRUCTURED_DIR,
+    UNSTRUCTURED_DIR,
 )
 from google.cloud import storage
 from google.cloud.exceptions import GoogleCloudError, NotFound
@@ -44,7 +46,11 @@ class StorageProvider(ABC):
 
     @abstractmethod
     def upload_file(
-        self, file: BinaryIO, filename: str, tags: Dict[str, str]
+        self,
+        file: BinaryIO,
+        filename: str,
+        tags: Dict[str, str],
+        base_dir: Optional[Union[str, "os.PathLike[str]"]] = None,
     ) -> Tuple[bytes, str]:
         pass
 
@@ -60,12 +66,18 @@ class StorageProvider(ABC):
 class LocalStorageProvider(StorageProvider):
     @staticmethod
     def upload_file(
-        file: BinaryIO, filename: str, tags: Dict[str, str]
+        file: BinaryIO,
+        filename: str,
+        tags: Dict[str, str],
+        base_dir: Optional[Union[str, "os.PathLike[str]"]] = None,
     ) -> Tuple[bytes, str]:
         contents = file.read()
         if not contents:
             raise ValueError(ERROR_MESSAGES.EMPTY_CONTENT)
-        file_path = f"{UPLOAD_DIR}/{filename}"
+        target_dir = base_dir if base_dir is not None else UPLOAD_DIR
+        target_dir = os.fspath(target_dir)
+        os.makedirs(target_dir, exist_ok=True)
+        file_path = os.path.join(target_dir, filename)
         with open(file_path, "wb") as f:
             f.write(contents)
         return contents, file_path
@@ -78,28 +90,40 @@ class LocalStorageProvider(StorageProvider):
     @staticmethod
     def delete_file(file_path: str) -> None:
         """Handles deletion of the file from local storage."""
+        # If path is full (structured/unstructured or absolute), delete at that path
+        if (
+            "structured" in file_path
+            or "unstructured" in file_path
+            or os.path.isabs(file_path)
+        ):
+            if os.path.isfile(file_path):
+                os.remove(file_path)
+            else:
+                log.warning(f"File {file_path} not found in local storage.")
+            return
         filename = file_path.split("/")[-1]
-        file_path = f"{UPLOAD_DIR}/{filename}"
-        if os.path.isfile(file_path):
-            os.remove(file_path)
+        path = os.path.join(UPLOAD_DIR, filename)
+        if os.path.isfile(path):
+            os.remove(path)
         else:
-            log.warning(f"File {file_path} not found in local storage.")
+            log.warning(f"File {path} not found in local storage.")
 
     @staticmethod
     def delete_all_files() -> None:
         """Handles deletion of all files from local storage."""
-        if os.path.exists(UPLOAD_DIR):
-            for filename in os.listdir(UPLOAD_DIR):
-                file_path = os.path.join(UPLOAD_DIR, filename)
-                try:
-                    if os.path.isfile(file_path) or os.path.islink(file_path):
-                        os.unlink(file_path)  # Remove the file or link
-                    elif os.path.isdir(file_path):
-                        shutil.rmtree(file_path)  # Remove the directory
-                except Exception as e:
-                    log.exception(f"Failed to delete {file_path}. Reason: {e}")
-        else:
-            log.warning(f"Directory {UPLOAD_DIR} not found in local storage.")
+        for base_dir in (UPLOAD_DIR, STRUCTURED_DIR, UNSTRUCTURED_DIR):
+            if os.path.exists(base_dir):
+                for filename in os.listdir(base_dir):
+                    path = os.path.join(base_dir, filename)
+                    try:
+                        if os.path.isfile(path) or os.path.islink(path):
+                            os.unlink(path)
+                        elif os.path.isdir(path):
+                            shutil.rmtree(path)
+                    except Exception as e:
+                        log.exception(f"Failed to delete {path}. Reason: {e}")
+            else:
+                log.warning(f"Directory {base_dir} not found in local storage.")
 
 
 class S3StorageProvider(StorageProvider):
@@ -143,10 +167,16 @@ class S3StorageProvider(StorageProvider):
         return re.sub(r"[^a-zA-Z0-9 äöüÄÖÜß\+\-=\._:/@]", "", s)
 
     def upload_file(
-        self, file: BinaryIO, filename: str, tags: Dict[str, str]
+        self,
+        file: BinaryIO,
+        filename: str,
+        tags: Dict[str, str],
+        base_dir: Optional[Union[str, "os.PathLike[str]"]] = None,
     ) -> Tuple[bytes, str]:
         """Handles uploading of the file to S3 storage."""
-        _, file_path = LocalStorageProvider.upload_file(file, filename, tags)
+        _, file_path = LocalStorageProvider.upload_file(
+            file, filename, tags, base_dir=base_dir
+        )
         s3_key = os.path.join(self.key_prefix, filename)
         try:
             self.s3_client.upload_file(file_path, self.bucket_name, s3_key)
@@ -236,10 +266,16 @@ class GCSStorageProvider(StorageProvider):
         self.bucket = self.gcs_client.bucket(GCS_BUCKET_NAME)
 
     def upload_file(
-        self, file: BinaryIO, filename: str, tags: Dict[str, str]
+        self,
+        file: BinaryIO,
+        filename: str,
+        tags: Dict[str, str],
+        base_dir: Optional[Union[str, "os.PathLike[str]"]] = None,
     ) -> Tuple[bytes, str]:
         """Handles uploading of the file to GCS storage."""
-        contents, file_path = LocalStorageProvider.upload_file(file, filename, tags)
+        contents, file_path = LocalStorageProvider.upload_file(
+            file, filename, tags, base_dir=base_dir
+        )
         try:
             blob = self.bucket.blob(filename)
             blob.upload_from_filename(file_path)
@@ -308,10 +344,16 @@ class AzureStorageProvider(StorageProvider):
         )
 
     def upload_file(
-        self, file: BinaryIO, filename: str, tags: Dict[str, str]
+        self,
+        file: BinaryIO,
+        filename: str,
+        tags: Dict[str, str],
+        base_dir: Optional[Union[str, "os.PathLike[str]"]] = None,
     ) -> Tuple[bytes, str]:
         """Handles uploading of the file to Azure Blob Storage."""
-        contents, file_path = LocalStorageProvider.upload_file(file, filename, tags)
+        contents, file_path = LocalStorageProvider.upload_file(
+            file, filename, tags, base_dir=base_dir
+        )
         try:
             blob_client = self.container_client.get_blob_client(filename)
             blob_client.upload_blob(contents, overwrite=True)

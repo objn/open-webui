@@ -103,6 +103,8 @@ from open_webui.config import (
     RAG_RERANKING_MODEL_AUTO_UPDATE,
     RAG_RERANKING_MODEL_TRUST_REMOTE_CODE,
     UPLOAD_DIR,
+    STRUCTURED_DIR,
+    UNSTRUCTURED_DIR,
     DEFAULT_LOCALE,
     RAG_EMBEDDING_CONTENT_PREFIX,
     RAG_EMBEDDING_QUERY_PREFIX,
@@ -2655,24 +2657,23 @@ def reset_vector_db(user=Depends(get_admin_user), db: Session = Depends(get_sess
 
 @router.post("/reset/uploads")
 def reset_upload_dir(user=Depends(get_admin_user)) -> bool:
-    folder = f"{UPLOAD_DIR}"
-    try:
-        # Check if the directory exists
-        if os.path.exists(folder):
-            # Iterate over all the files and directories in the specified directory
-            for filename in os.listdir(folder):
-                file_path = os.path.join(folder, filename)
-                try:
-                    if os.path.isfile(file_path) or os.path.islink(file_path):
-                        os.unlink(file_path)  # Remove the file or link
-                    elif os.path.isdir(file_path):
-                        shutil.rmtree(file_path)  # Remove the directory
-                except Exception as e:
-                    log.exception(f"Failed to delete {file_path}. Reason: {e}")
-        else:
-            log.warning(f"The directory {folder} does not exist")
-    except Exception as e:
-        log.exception(f"Failed to process the directory {folder}. Reason: {e}")
+    for folder in (UPLOAD_DIR, STRUCTURED_DIR, UNSTRUCTURED_DIR):
+        folder_str = f"{folder}"
+        try:
+            if os.path.exists(folder_str):
+                for filename in os.listdir(folder_str):
+                    file_path = os.path.join(folder_str, filename)
+                    try:
+                        if os.path.isfile(file_path) or os.path.islink(file_path):
+                            os.unlink(file_path)
+                        elif os.path.isdir(file_path):
+                            shutil.rmtree(file_path)
+                    except Exception as e:
+                        log.exception(f"Failed to delete {file_path}. Reason: {e}")
+            else:
+                log.warning(f"The directory {folder_str} does not exist")
+        except Exception as e:
+            log.exception(f"Failed to process the directory {folder_str}. Reason: {e}")
     return True
 
 

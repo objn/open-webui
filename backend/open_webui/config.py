@@ -954,6 +954,17 @@ AZURE_STORAGE_KEY = os.environ.get("AZURE_STORAGE_KEY", None)
 UPLOAD_DIR = DATA_DIR / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
+STRUCTURED_DIR = DATA_DIR / "structured"
+STRUCTURED_DIR.mkdir(parents=True, exist_ok=True)
+UNSTRUCTURED_DIR = DATA_DIR / "unstructured"
+UNSTRUCTURED_DIR.mkdir(parents=True, exist_ok=True)
+
+####################################
+# BigQuery (GCP) - sync file, knowledge, knowledge_file, chat_file
+####################################
+BIGQUERY_ENABLED = os.environ.get("BIGQUERY_ENABLED", "false").lower() == "true"
+BIGQUERY_PROJECT = os.environ.get("BIGQUERY_PROJECT", "")
+BIGQUERY_DATASET = os.environ.get("BIGQUERY_DATASET", "")
 
 ####################################
 # Cache DIR
