@@ -954,9 +954,10 @@ AZURE_STORAGE_KEY = os.environ.get("AZURE_STORAGE_KEY", None)
 UPLOAD_DIR = DATA_DIR / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-STRUCTURED_DIR = DATA_DIR / "structured"
+# Structured/unstructured files live under uploads
+STRUCTURED_DIR = UPLOAD_DIR / "structured"
 STRUCTURED_DIR.mkdir(parents=True, exist_ok=True)
-UNSTRUCTURED_DIR = DATA_DIR / "unstructured"
+UNSTRUCTURED_DIR = UPLOAD_DIR / "unstructured"
 UNSTRUCTURED_DIR.mkdir(parents=True, exist_ok=True)
 
 ####################################

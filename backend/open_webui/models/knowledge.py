@@ -688,4 +688,18 @@ class KnowledgeTable:
                 return False
 
 
-Knowledges = KnowledgeTable()
+def _get_knowledge_backend():
+    """When BIGQUERY_ENABLED=true, use BigQuery for knowledge and knowledge_file (no PostgreSQL)."""
+    try:
+        from open_webui.config import BIGQUERY_ENABLED
+
+        if BIGQUERY_ENABLED:
+            from open_webui.integrations.bigquery_store import KnowledgeTableBigQuery
+
+            return KnowledgeTableBigQuery()
+    except Exception as e:
+        log.debug("BigQuery Knowledges backend not used: %s", e)
+    return KnowledgeTable()
+
+
+Knowledges = _get_knowledge_backend()

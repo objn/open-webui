@@ -47,7 +47,6 @@ from open_webui.routers.audio import transcribe
 
 from open_webui.storage.provider import Storage
 from open_webui.config import STRUCTURED_DIR, UNSTRUCTURED_DIR
-from open_webui.integrations.bigquery_sync import sync_file as bigquery_sync_file
 
 
 from open_webui.utils.auth import get_admin_user, get_verified_user
@@ -330,11 +329,11 @@ def upload_file_handler(
             db=db,
         )
 
-        if file_item:
-            if background_tasks:
-                background_tasks.add_task(bigquery_sync_file, file_item)
-            else:
-                bigquery_sync_file(file_item)
+        if not file_item:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=ERROR_MESSAGES.DEFAULT("Error uploading file"),
+            )
 
         if "channel_id" in file_metadata:
             channel = Channels.get_channel_by_id_and_user_id(

@@ -18,6 +18,13 @@ log = logging.getLogger(__name__)
 _client: Optional[Any] = None
 
 
+def _row_to_dict(row: Any) -> dict:
+    """Convert BigQuery Row to dict."""
+    if hasattr(row, "keys") and hasattr(row, "values"):
+        return dict(zip(row.keys(), row.values()))
+    return dict(row) if not isinstance(row, dict) else row
+
+
 def _get_client():
     global _client
     if _client is not None:
@@ -296,3 +303,681 @@ def sync_chat_file(item: Any) -> None:
         client.query(query, job_config=job_config).result()
     except Exception as e:
         log.exception("BigQuery sync_chat_file failed: %s", e)
+
+
+def _row_to_file_model(row: dict) -> "FileModel":
+    from open_webui.models.files import FileModel
+
+    data = row.get("data")
+    if isinstance(data, str) and data:
+        try:
+            data = json.loads(data)
+        except Exception:
+            data = {}
+    meta = row.get("meta")
+    if isinstance(meta, str) and meta:
+        try:
+            meta = json.loads(meta)
+        except Exception:
+            meta = {}
+    return FileModel(
+        id=row.get("id") or "",
+        user_id=row.get("user_id") or "",
+        hash=row.get("hash"),
+        filename=row.get("filename") or "",
+        path=row.get("path"),
+        mime_type=row.get("mime_type"),
+        file_size=int(row["file_size"]) if row.get("file_size") is not None else None,
+        is_structured=bool(row["is_structured"]) if row.get("is_structured") is not None else None,
+        data=data,
+        meta=meta,
+        created_at=int(row["created_at"]) if row.get("created_at") is not None else None,
+        updated_at=int(row["updated_at"]) if row.get("updated_at") is not None else None,
+    )
+
+
+def get_file_by_id_bq(file_id: str) -> Optional[Any]:
+    """Read one file row from BigQuery by id. Returns FileModel or None."""
+    client = _get_client()
+    if client is None:
+        return None
+    try:
+        _ensure_dataset_and_tables(client)
+        dataset_ref = f"{BIGQUERY_PROJECT}.{BIGQUERY_DATASET}"
+        query = f"SELECT * FROM `{dataset_ref}.file` WHERE id = @id LIMIT 1"
+        from google.cloud import bigquery
+
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[bigquery.ScalarQueryParameter("id", "STRING", file_id)]
+        )
+        rows = list(client.query(query, job_config=job_config).result())
+        if not rows:
+            return None
+        row = _row_to_dict(rows[0])
+        return _row_to_file_model(row)
+    except Exception as e:
+        log.exception("BigQuery get_file_by_id failed: %s", e)
+        return None
+
+
+def get_files_by_user_id_bq(user_id: str) -> list:
+    """Read file rows from BigQuery by user_id."""
+    client = _get_client()
+    if client is None:
+        return []
+    try:
+        _ensure_dataset_and_tables(client)
+        dataset_ref = f"{BIGQUERY_PROJECT}.{BIGQUERY_DATASET}"
+        query = f"SELECT * FROM `{dataset_ref}.file` WHERE user_id = @uid ORDER BY updated_at DESC"
+        from google.cloud import bigquery
+
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[bigquery.ScalarQueryParameter("uid", "STRING", user_id)]
+        )
+        return [_row_to_file_model(_row_to_dict(r)) for r in client.query(query, job_config=job_config).result()]
+    except Exception as e:
+        log.exception("BigQuery get_files_by_user_id failed: %s", e)
+        return []
+
+
+def get_files_by_ids_bq(ids: list[str]) -> list:
+    """Read file rows from BigQuery by list of ids."""
+    if not ids:
+        return []
+    client = _get_client()
+    if client is None:
+        return []
+    try:
+        _ensure_dataset_and_tables(client)
+        dataset_ref = f"{BIGQUERY_PROJECT}.{BIGQUERY_DATASET}"
+        placeholders = ", ".join(f"@id{i}" for i in range(len(ids)))
+        query = f"SELECT * FROM `{dataset_ref}.file` WHERE id IN ({placeholders}) ORDER BY updated_at DESC"
+        from google.cloud import bigquery
+
+        params = [bigquery.ScalarQueryParameter(f"id{i}", "STRING", sid) for i, sid in enumerate(ids)]
+        job_config = bigquery.QueryJobConfig(query_parameters=params)
+        return [_row_to_file_model(_row_to_dict(r)) for r in client.query(query, job_config=job_config).result()]
+    except Exception as e:
+        log.exception("BigQuery get_files_by_ids failed: %s", e)
+        return []
+
+
+def get_all_files_bq() -> list:
+    """Read all file rows from BigQuery."""
+    client = _get_client()
+    if client is None:
+        return []
+    try:
+        _ensure_dataset_and_tables(client)
+        dataset_ref = f"{BIGQUERY_PROJECT}.{BIGQUERY_DATASET}"
+        query = f"SELECT * FROM `{dataset_ref}.file` ORDER BY updated_at DESC"
+        return [_row_to_file_model(_row_to_dict(r)) for r in client.query(query).result()]
+    except Exception as e:
+        log.exception("BigQuery get_all_files failed: %s", e)
+        return []
+
+
+def update_file_data_by_id_bq(file_id: str, data: dict) -> Optional[Any]:
+    """Update file.data in BigQuery; merge with existing."""
+    existing = get_file_by_id_bq(file_id)
+    if not existing:
+        return None
+    import time
+
+    new_data = {**(existing.data or {}), **data}
+    from open_webui.models.files import FileModel
+
+    updated = FileModel(
+        **{**existing.model_dump(), "data": new_data, "updated_at": int(time.time())}
+    )
+    sync_file(updated)
+    return get_file_by_id_bq(file_id)
+
+
+def update_file_metadata_by_id_bq(file_id: str, meta: dict) -> Optional[Any]:
+    existing = get_file_by_id_bq(file_id)
+    if not existing:
+        return None
+    import time
+
+    new_meta = {**(existing.meta or {}), **meta}
+    from open_webui.models.files import FileModel
+
+    updated = FileModel(
+        **{**existing.model_dump(), "meta": new_meta, "updated_at": int(time.time())}
+    )
+    sync_file(updated)
+    return get_file_by_id_bq(file_id)
+
+
+def update_file_hash_by_id_bq(file_id: str, hash_val: Optional[str]) -> Optional[Any]:
+    existing = get_file_by_id_bq(file_id)
+    if not existing:
+        return None
+    import time
+
+    from open_webui.models.files import FileModel
+
+    updated = FileModel(
+        **{**existing.model_dump(), "hash": hash_val, "updated_at": int(time.time())}
+    )
+    sync_file(updated)
+    return get_file_by_id_bq(file_id)
+
+
+def delete_file_by_id_bq(file_id: str) -> bool:
+    """Delete one file row from BigQuery."""
+    client = _get_client()
+    if client is None:
+        return False
+    try:
+        dataset_ref = f"{BIGQUERY_PROJECT}.{BIGQUERY_DATASET}"
+        query = f"DELETE FROM `{dataset_ref}.file` WHERE id = @id"
+        from google.cloud import bigquery
+
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[bigquery.ScalarQueryParameter("id", "STRING", file_id)]
+        )
+        client.query(query, job_config=job_config).result()
+        return True
+    except Exception as e:
+        log.exception("BigQuery delete_file_by_id failed: %s", e)
+        return False
+
+
+def insert_file_bq(user_id: str, form_data: Any) -> Optional[Any]:
+    """Insert file into BigQuery only (no PostgreSQL). Returns FileModel."""
+    import time
+
+    from open_webui.models.files import FileModel
+
+    fd = form_data.model_dump() if hasattr(form_data, "model_dump") else form_data
+    file = FileModel(
+        **{
+            **fd,
+            "user_id": user_id,
+            "created_at": int(time.time()),
+            "updated_at": int(time.time()),
+        }
+    )
+    sync_file(file)
+    return get_file_by_id_bq(file.id)
+
+
+def get_file_metadata_by_id_bq(file_id: str) -> Optional[Any]:
+    """Return FileMetadataResponse from BigQuery."""
+    from open_webui.models.files import FileMetadataResponse
+
+    f = get_file_by_id_bq(file_id)
+    if not f:
+        return None
+    return FileMetadataResponse(
+        id=f.id,
+        hash=f.hash,
+        meta=f.meta,
+        created_at=f.created_at or 0,
+        updated_at=f.updated_at or 0,
+    )
+
+
+def get_file_metadatas_by_ids_bq(ids: list[str]) -> list:
+    """Return list of FileMetadataResponse from BigQuery."""
+    from open_webui.models.files import FileMetadataResponse
+
+    files = get_files_by_ids_bq(ids)
+    return [
+        FileMetadataResponse(
+            id=f.id,
+            hash=f.hash,
+            meta=f.meta,
+            created_at=f.created_at or 0,
+            updated_at=f.updated_at or 0,
+        )
+        for f in files
+    ]
+
+
+def search_files_bq(
+    user_id: Optional[str] = None,
+    filename: str = "*",
+    skip: int = 0,
+    limit: int = 100,
+) -> list:
+    """Search files in BigQuery. filename supports * and ? as glob."""
+    client = _get_client()
+    if client is None:
+        return []
+    try:
+        _ensure_dataset_and_tables(client)
+        dataset_ref = f"{BIGQUERY_PROJECT}.{BIGQUERY_DATASET}"
+        conditions = []
+        params = []
+        from google.cloud import bigquery
+
+        if user_id:
+            conditions.append("user_id = @user_id")
+            params.append(bigquery.ScalarQueryParameter("user_id", "STRING", user_id))
+        if filename and filename != "*":
+            # Glob to LIKE: * -> %, ? -> _, escape % _ \
+            like = filename.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_").replace("*", "%").replace("?", "_")
+            conditions.append("LOWER(filename) LIKE LOWER(@pattern)")
+            params.append(bigquery.ScalarQueryParameter("pattern", "STRING", like))
+        where = " AND ".join(conditions) if conditions else "1=1"
+        query = f"SELECT * FROM `{dataset_ref}.file` WHERE {where} ORDER BY updated_at DESC LIMIT @lim OFFSET @off"
+        params.extend([
+            bigquery.ScalarQueryParameter("lim", "INT64", limit),
+            bigquery.ScalarQueryParameter("off", "INT64", skip),
+        ])
+        job_config = bigquery.QueryJobConfig(query_parameters=params)
+        return [_row_to_file_model(_row_to_dict(r)) for r in client.query(query, job_config=job_config).result()]
+    except Exception as e:
+        log.exception("BigQuery search_files failed: %s", e)
+        return []
+
+
+def delete_all_files_bq() -> bool:
+    """Delete all file rows from BigQuery."""
+    client = _get_client()
+    if client is None:
+        return False
+    try:
+        dataset_ref = f"{BIGQUERY_PROJECT}.{BIGQUERY_DATASET}"
+        query = f"DELETE FROM `{dataset_ref}.file` WHERE TRUE"
+        client.query(query).result()
+        return True
+    except Exception as e:
+        log.exception("BigQuery delete_all_files failed: %s", e)
+        return False
+
+
+def update_file_by_id_bq(file_id: str, form_data: Any) -> Optional[Any]:
+    """Update file by id in BigQuery (hash, data, meta)."""
+    existing = get_file_by_id_bq(file_id)
+    if not existing:
+        return None
+    import time
+
+    from open_webui.models.files import FileModel
+
+    upd = existing.model_dump()
+    if form_data.hash is not None:
+        upd["hash"] = form_data.hash
+    if form_data.data is not None:
+        upd["data"] = {**(existing.data or {}), **form_data.data}
+    if form_data.meta is not None:
+        upd["meta"] = {**(existing.meta or {}), **form_data.meta}
+    upd["updated_at"] = int(time.time())
+    updated = FileModel(**upd)
+    sync_file(updated)
+    return get_file_by_id_bq(file_id)
+
+
+# ---------- Knowledge ----------
+def _row_to_knowledge_model(row: dict) -> Any:
+    from open_webui.models.knowledge import KnowledgeModel
+
+    meta = row.get("meta")
+    if isinstance(meta, str) and meta:
+        try:
+            meta = json.loads(meta)
+        except Exception:
+            meta = {}
+    return KnowledgeModel(
+        id=row.get("id") or "",
+        user_id=row.get("user_id") or "",
+        name=row.get("name") or "",
+        description=row.get("description") or "",
+        meta=meta,
+        created_at=int(row["created_at"]) if row.get("created_at") is not None else 0,
+        updated_at=int(row["updated_at"]) if row.get("updated_at") is not None else 0,
+    )
+
+
+def get_knowledge_by_id_bq(knowledge_id: str) -> Optional[Any]:
+    client = _get_client()
+    if client is None:
+        return None
+    try:
+        _ensure_dataset_and_tables(client)
+        dataset_ref = f"{BIGQUERY_PROJECT}.{BIGQUERY_DATASET}"
+        from google.cloud import bigquery
+
+        query = f"SELECT * FROM `{dataset_ref}.knowledge` WHERE id = @id LIMIT 1"
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[bigquery.ScalarQueryParameter("id", "STRING", knowledge_id)]
+        )
+        rows = list(client.query(query, job_config=job_config).result())
+        if not rows:
+            return None
+        return _row_to_knowledge_model(_row_to_dict(rows[0]))
+    except Exception as e:
+        log.exception("BigQuery get_knowledge_by_id failed: %s", e)
+        return None
+
+
+def insert_knowledge_bq(user_id: str, form_data: Any) -> Optional[Any]:
+    import time
+    import uuid
+    from open_webui.models.knowledge import KnowledgeModel
+
+    k = KnowledgeModel(
+        **{
+            **form_data.model_dump(exclude={"access_grants"}, exclude_none=True),
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "created_at": int(time.time()),
+            "updated_at": int(time.time()),
+        }
+    )
+    sync_knowledge(k)
+    return get_knowledge_by_id_bq(k.id)
+
+
+def update_knowledge_by_id_bq(knowledge_id: str, form_data: Any) -> Optional[Any]:
+    existing = get_knowledge_by_id_bq(knowledge_id)
+    if not existing:
+        return None
+    import time
+    from open_webui.models.knowledge import KnowledgeModel
+
+    upd = existing.model_dump()
+    for k in ("name", "description", "meta"):
+        if hasattr(form_data, k) and getattr(form_data, k) is not None:
+            upd[k] = getattr(form_data, k)
+    upd["updated_at"] = int(time.time())
+    sync_knowledge(KnowledgeModel(**upd))
+    return get_knowledge_by_id_bq(knowledge_id)
+
+
+def update_knowledge_data_by_id_bq(knowledge_id: str, data: dict) -> Optional[Any]:
+    """Update knowledge updated_at only (BQ knowledge table has no data column). Returns refreshed knowledge."""
+    client = _get_client()
+    if client is None:
+        return None
+    try:
+        import time
+
+        dataset_ref = f"{BIGQUERY_PROJECT}.{BIGQUERY_DATASET}"
+        from google.cloud import bigquery
+
+        query = f"UPDATE `{dataset_ref}.knowledge` SET updated_at = @ts WHERE id = @id"
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("ts", "INT64", int(time.time())),
+                bigquery.ScalarQueryParameter("id", "STRING", knowledge_id),
+            ]
+        )
+        client.query(query, job_config=job_config).result()
+        return get_knowledge_by_id_bq(knowledge_id)
+    except Exception as e:
+        log.exception("BigQuery update_knowledge_data_by_id failed: %s", e)
+        return None
+
+
+def get_knowledge_files_by_knowledge_id_bq(knowledge_id: str) -> list:
+    client = _get_client()
+    if client is None:
+        return []
+    try:
+        _ensure_dataset_and_tables(client)
+        dataset_ref = f"{BIGQUERY_PROJECT}.{BIGQUERY_DATASET}"
+        from google.cloud import bigquery
+        from open_webui.models.knowledge import KnowledgeFileModel
+
+        query = f"SELECT * FROM `{dataset_ref}.knowledge_file` WHERE knowledge_id = @kid ORDER BY created_at ASC"
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[bigquery.ScalarQueryParameter("kid", "STRING", knowledge_id)]
+        )
+        return [
+            KnowledgeFileModel(
+                id=str(r.id),
+                knowledge_id=str(r.knowledge_id),
+                file_id=str(r.file_id),
+                user_id=str(r.user_id),
+                created_at=int(r.created_at) if r.created_at is not None else 0,
+                updated_at=int(r.updated_at) if r.updated_at is not None else 0,
+            )
+            for r in client.query(query, job_config=job_config).result()
+        ]
+    except Exception as e:
+        log.exception("BigQuery get_knowledge_files_by_knowledge_id failed: %s", e)
+        return []
+
+
+def add_knowledge_file_bq(knowledge_id: str, file_id: str, user_id: str) -> Optional[Any]:
+    import time
+    import uuid
+    from open_webui.models.knowledge import KnowledgeFileModel
+
+    kf = KnowledgeFileModel(
+        id=str(uuid.uuid4()),
+        knowledge_id=knowledge_id,
+        file_id=file_id,
+        user_id=user_id,
+        created_at=int(time.time()),
+        updated_at=int(time.time()),
+    )
+    sync_knowledge_file(kf)
+    return kf
+
+
+def remove_knowledge_file_bq(knowledge_id: str, file_id: str) -> bool:
+    client = _get_client()
+    if client is None:
+        return False
+    try:
+        dataset_ref = f"{BIGQUERY_PROJECT}.{BIGQUERY_DATASET}"
+        from google.cloud import bigquery
+
+        query = f"DELETE FROM `{dataset_ref}.knowledge_file` WHERE knowledge_id = @kid AND file_id = @fid"
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("kid", "STRING", knowledge_id),
+                bigquery.ScalarQueryParameter("fid", "STRING", file_id),
+            ]
+        )
+        client.query(query, job_config=job_config).result()
+        return True
+    except Exception as e:
+        log.exception("BigQuery remove_knowledge_file failed: %s", e)
+        return False
+
+
+def get_knowledges_by_file_id_bq(file_id: str) -> list:
+    client = _get_client()
+    if client is None:
+        return []
+    try:
+        _ensure_dataset_and_tables(client)
+        dataset_ref = f"{BIGQUERY_PROJECT}.{BIGQUERY_DATASET}"
+        from google.cloud import bigquery
+
+        query = f"SELECT k.* FROM `{dataset_ref}.knowledge` k INNER JOIN `{dataset_ref}.knowledge_file` kf ON k.id = kf.knowledge_id WHERE kf.file_id = @fid"
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[bigquery.ScalarQueryParameter("fid", "STRING", file_id)]
+        )
+        return [_row_to_knowledge_model(_row_to_dict(r)) for r in client.query(query, job_config=job_config).result()]
+    except Exception as e:
+        log.exception("BigQuery get_knowledges_by_file_id failed: %s", e)
+        return []
+
+
+def delete_knowledge_by_id_bq(knowledge_id: str) -> bool:
+    client = _get_client()
+    if client is None:
+        return False
+    try:
+        dataset_ref = f"{BIGQUERY_PROJECT}.{BIGQUERY_DATASET}"
+        from google.cloud import bigquery
+
+        client.query(f"DELETE FROM `{dataset_ref}.knowledge_file` WHERE knowledge_id = @kid", job_config=bigquery.QueryJobConfig(query_parameters=[bigquery.ScalarQueryParameter("kid", "STRING", knowledge_id)])).result()
+        client.query(f"DELETE FROM `{dataset_ref}.knowledge` WHERE id = @id", job_config=bigquery.QueryJobConfig(query_parameters=[bigquery.ScalarQueryParameter("id", "STRING", knowledge_id)])).result()
+        return True
+    except Exception as e:
+        log.exception("BigQuery delete_knowledge_by_id failed: %s", e)
+        return False
+
+
+def get_all_knowledges_bq() -> list:
+    client = _get_client()
+    if client is None:
+        return []
+    try:
+        _ensure_dataset_and_tables(client)
+        dataset_ref = f"{BIGQUERY_PROJECT}.{BIGQUERY_DATASET}"
+        query = f"SELECT * FROM `{dataset_ref}.knowledge` ORDER BY updated_at DESC"
+        return [_row_to_knowledge_model(_row_to_dict(r)) for r in client.query(query).result()]
+    except Exception as e:
+        log.exception("BigQuery get_all_knowledges failed: %s", e)
+        return []
+
+
+def reset_knowledge_by_id_bq(knowledge_id: str) -> bool:
+    """Delete all knowledge_file rows for this knowledge and update knowledge.updated_at."""
+    client = _get_client()
+    if client is None:
+        return False
+    try:
+        import time
+
+        dataset_ref = f"{BIGQUERY_PROJECT}.{BIGQUERY_DATASET}"
+        from google.cloud import bigquery
+
+        client.query(
+            f"DELETE FROM `{dataset_ref}.knowledge_file` WHERE knowledge_id = @kid",
+            job_config=bigquery.QueryJobConfig(
+                query_parameters=[bigquery.ScalarQueryParameter("kid", "STRING", knowledge_id)]
+            ),
+        ).result()
+        client.query(
+            f"UPDATE `{dataset_ref}.knowledge` SET updated_at = @ts WHERE id = @id",
+            job_config=bigquery.QueryJobConfig(
+                query_parameters=[
+                    bigquery.ScalarQueryParameter("ts", "INT64", int(time.time())),
+                    bigquery.ScalarQueryParameter("id", "STRING", knowledge_id),
+                ]
+            ),
+        ).result()
+        return True
+    except Exception as e:
+        log.exception("BigQuery reset_knowledge_by_id failed: %s", e)
+        return False
+
+
+def delete_all_knowledge_bq() -> bool:
+    client = _get_client()
+    if client is None:
+        return False
+    try:
+        dataset_ref = f"{BIGQUERY_PROJECT}.{BIGQUERY_DATASET}"
+        from google.cloud import bigquery
+
+        client.query(f"DELETE FROM `{dataset_ref}.knowledge_file` WHERE TRUE").result()
+        client.query(f"DELETE FROM `{dataset_ref}.knowledge` WHERE TRUE").result()
+        return True
+    except Exception as e:
+        log.exception("BigQuery delete_all_knowledge failed: %s", e)
+        return False
+
+
+# ---------- ChatFile ----------
+def _row_to_chat_file_model(row: dict) -> Any:
+    from open_webui.models.chats import ChatFileModel
+
+    return ChatFileModel(
+        id=row.get("id") or "",
+        user_id=row.get("user_id") or "",
+        chat_id=row.get("chat_id") or "",
+        message_id=row.get("message_id"),
+        file_id=row.get("file_id") or "",
+        created_at=int(row["created_at"]) if row.get("created_at") is not None else 0,
+        updated_at=int(row["updated_at"]) if row.get("updated_at") is not None else 0,
+    )
+
+
+def insert_chat_files_bq(chat_id: str, message_id: str, file_ids: list[str], user_id: str) -> Optional[list]:
+    import time
+    import uuid
+    from open_webui.models.chats import ChatFileModel
+
+    created = []
+    for file_id in file_ids:
+        if not file_id:
+            continue
+        cf = ChatFileModel(
+            id=str(uuid.uuid4()),
+            user_id=user_id,
+            chat_id=chat_id,
+            message_id=message_id,
+            file_id=file_id,
+            created_at=int(time.time()),
+            updated_at=int(time.time()),
+        )
+        sync_chat_file(cf)
+        created.append(cf)
+    return created if created else None
+
+
+def get_chat_files_by_chat_id_and_message_id_bq(chat_id: str, message_id: str) -> list:
+    client = _get_client()
+    if client is None:
+        return []
+    try:
+        _ensure_dataset_and_tables(client)
+        dataset_ref = f"{BIGQUERY_PROJECT}.{BIGQUERY_DATASET}"
+        from google.cloud import bigquery
+
+        query = f"SELECT * FROM `{dataset_ref}.chat_file` WHERE chat_id = @cid AND message_id = @mid ORDER BY created_at ASC"
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("cid", "STRING", chat_id),
+                bigquery.ScalarQueryParameter("mid", "STRING", message_id or ""),
+            ]
+        )
+        rows = list(client.query(query, job_config=job_config).result())
+        return [_row_to_chat_file_model(_row_to_dict(r)) for r in rows]
+    except Exception as e:
+        log.exception("BigQuery get_chat_files_by_chat_id_and_message_id failed: %s", e)
+        return []
+
+
+def delete_chat_file_bq(chat_id: str, file_id: str) -> bool:
+    client = _get_client()
+    if client is None:
+        return False
+    try:
+        dataset_ref = f"{BIGQUERY_PROJECT}.{BIGQUERY_DATASET}"
+        from google.cloud import bigquery
+
+        query = f"DELETE FROM `{dataset_ref}.chat_file` WHERE chat_id = @cid AND file_id = @fid"
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("cid", "STRING", chat_id),
+                bigquery.ScalarQueryParameter("fid", "STRING", file_id),
+            ]
+        )
+        client.query(query, job_config=job_config).result()
+        return True
+    except Exception as e:
+        log.exception("BigQuery delete_chat_file failed: %s", e)
+        return False
+
+
+def get_chat_ids_by_file_id_bq(file_id: str) -> list:
+    """Return list of chat_id that reference this file_id (for get_shared_chats)."""
+    client = _get_client()
+    if client is None:
+        return []
+    try:
+        _ensure_dataset_and_tables(client)
+        dataset_ref = f"{BIGQUERY_PROJECT}.{BIGQUERY_DATASET}"
+        from google.cloud import bigquery
+
+        query = f"SELECT DISTINCT chat_id FROM `{dataset_ref}.chat_file` WHERE file_id = @fid"
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[bigquery.ScalarQueryParameter("fid", "STRING", file_id)]
+        )
+        return [str(r.chat_id) for r in client.query(query, job_config=job_config).result()]
+    except Exception as e:
+        log.exception("BigQuery get_chat_ids_by_file_id failed: %s", e)
+        return []

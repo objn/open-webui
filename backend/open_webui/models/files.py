@@ -410,4 +410,18 @@ class FilesTable:
                 return False
 
 
-Files = FilesTable()
+def _get_files_backend():
+    """When BIGQUERY_ENABLED=true, use BigQuery for file table only (no PostgreSQL)."""
+    try:
+        from open_webui.config import BIGQUERY_ENABLED
+
+        if BIGQUERY_ENABLED:
+            from open_webui.integrations.bigquery_store import FilesTableBigQuery
+
+            return FilesTableBigQuery()
+    except Exception as e:
+        log.debug("BigQuery Files backend not used: %s", e)
+    return FilesTable()
+
+
+Files = _get_files_backend()
