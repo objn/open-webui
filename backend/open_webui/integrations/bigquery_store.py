@@ -208,9 +208,10 @@ class KnowledgeTableBigQuery:
         result = []
         for k in all_k[skip : skip + limit]:
             km = self._to_knowledge_model(k, db=db)
+            user = users_dict.get(k.user_id)
             result.append(
                 KnowledgeUserModel.model_validate(
-                    {**km.model_dump(), "user": users_dict.get(k.user_id)}
+                    {**km.model_dump(), "user": user.model_dump() if user else None}
                 )
             )
         return result
@@ -334,9 +335,10 @@ class KnowledgeTableBigQuery:
         items = []
         for k in page:
             km = self._to_knowledge_model(k, db=db)
+            user = users_dict.get(k.user_id)
             items.append(
                 KnowledgeUserModel.model_validate(
-                    {**km.model_dump(), "user": users_dict.get(k.user_id)}
+                    {**km.model_dump(), "user": user.model_dump() if user else None}
                 )
             )
         return KnowledgeListResponse(items=items, total=total)
