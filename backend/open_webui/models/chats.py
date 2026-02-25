@@ -1635,7 +1635,7 @@ class ChatTable:
 
 
 def _get_chats_backend():
-    from open_webui.internal.config import BIGQUERY_ENABLED
+    from open_webui.config import BIGQUERY_ENABLED
 
     if not BIGQUERY_ENABLED:
         return ChatTable()
