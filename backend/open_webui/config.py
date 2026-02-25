@@ -21,7 +21,6 @@ from authlib.integrations.starlette_client import OAuth
 from open_webui.env import (
     DATA_DIR,
     DATABASE_URL,
-    ENABLE_DB_MIGRATIONS,
     ENV,
     REDIS_URL,
     REDIS_KEY_PREFIX,
@@ -50,28 +49,6 @@ logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
 ####################################
 # Config helpers
 ####################################
-
-
-# Function to run the alembic migrations
-def run_migrations():
-    log.info("Running migrations")
-    try:
-        from alembic import command
-        from alembic.config import Config
-
-        alembic_cfg = Config(OPEN_WEBUI_DIR / "alembic.ini")
-
-        # Set the script location dynamically
-        migrations_path = OPEN_WEBUI_DIR / "migrations"
-        alembic_cfg.set_main_option("script_location", str(migrations_path))
-
-        command.upgrade(alembic_cfg, "head")
-    except Exception as e:
-        log.exception(f"Error running migrations: {e}")
-
-
-if ENABLE_DB_MIGRATIONS:
-    run_migrations()
 
 
 class Config(Base):

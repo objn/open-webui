@@ -357,11 +357,6 @@ class GCSStorageProvider(StorageProvider):
                 blob = self.bucket.get_blob(blob_key)
                 blob.delete()
             else:
-            after_gs = file_path.removeprefix("gs://")
-            parts = after_gs.split("/", 1)
-            key = parts[1] if len(parts) > 1 else after_gs
-            blob = self.bucket.get_blob(key)
-            blob.delete()
                 LocalStorageProvider.delete_file(file_path)
                 return
         except NotFound as e:
