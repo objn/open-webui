@@ -295,7 +295,6 @@ def upload_file_handler(
             },
             base_dir=target_dir,
         )
-
         is_structured = _is_structured_extension(file_extension)
         file_item = Files.insert_new_file(
             user.id,
