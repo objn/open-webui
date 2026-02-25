@@ -161,21 +161,21 @@ def sync_file(file_item: Any) -> None:
             is_structured = False
         query = f"""
         MERGE `{dataset_ref}.file` T
-        USING (SELECT @id AS id, @user_id AS user_id, @hash AS hash, @filename AS filename,
+        USING (SELECT @id AS id, @user_id AS user_id, @p_hash AS `hash`, @filename AS filename,
                @path AS path, @mime_type AS mime_type, @file_size AS file_size, @is_structured AS is_structured,
                @data AS data, @meta AS meta, @created_at AS created_at, @updated_at AS updated_at) S
         ON T.id = S.id
-        WHEN MATCHED THEN UPDATE SET user_id=S.user_id, hash=S.hash, filename=S.filename, path=S.path,
+        WHEN MATCHED THEN UPDATE SET user_id=S.user_id, `hash`=S.`hash`, filename=S.filename, path=S.path,
             mime_type=S.mime_type, file_size=S.file_size, is_structured=S.is_structured,
             data=S.data, meta=S.meta, updated_at=S.updated_at
-        WHEN NOT MATCHED THEN INSERT (id, user_id, hash, filename, path, mime_type, file_size, is_structured, data, meta, created_at, updated_at)
-            VALUES (S.id, S.user_id, S.hash, S.filename, S.path, S.mime_type, S.file_size, S.is_structured, S.data, S.meta, S.created_at, S.updated_at)
+        WHEN NOT MATCHED THEN INSERT (id, user_id, `hash`, filename, path, mime_type, file_size, is_structured, data, meta, created_at, updated_at)
+            VALUES (S.id, S.user_id, S.`hash`, S.filename, S.path, S.mime_type, S.file_size, S.is_structured, S.data, S.meta, S.created_at, S.updated_at)
         """
         job_config = bigquery.QueryJobConfig(
             query_parameters=[
                 bigquery.ScalarQueryParameter("id", "STRING", row.get("id") or ""),
                 bigquery.ScalarQueryParameter("user_id", "STRING", row.get("user_id") or ""),
-                bigquery.ScalarQueryParameter("hash", "STRING", row.get("hash") or ""),
+                bigquery.ScalarQueryParameter("p_hash", "STRING", row.get("hash") or ""),
                 bigquery.ScalarQueryParameter("filename", "STRING", row.get("filename") or ""),
                 bigquery.ScalarQueryParameter("path", "STRING", row.get("path") or ""),
                 bigquery.ScalarQueryParameter("mime_type", "STRING", mime_type),

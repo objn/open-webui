@@ -272,25 +272,35 @@ class GCSStorageProvider(StorageProvider):
         tags: Dict[str, str],
         base_dir: Optional[Union[str, "os.PathLike[str]"]] = None,
     ) -> Tuple[bytes, str]:
-        """Handles uploading of the file to GCS storage."""
+        """Handles uploading of the file to GCS storage. Uses uploads/structured/ or uploads/unstructured/ as prefix when base_dir is set."""
         contents, file_path = LocalStorageProvider.upload_file(
             file, filename, tags, base_dir=base_dir
         )
         try:
-            blob = self.bucket.blob(filename)
+            upload_dir_str = os.fspath(UPLOAD_DIR)
+            file_path_str = os.fspath(file_path)
+            if file_path_str.startswith(upload_dir_str):
+                rel = os.path.relpath(file_path_str, upload_dir_str)
+                gcs_key = "uploads/" + rel.replace(os.path.sep, "/")
+            else:
+                gcs_key = "uploads/" + filename
+            blob = self.bucket.blob(gcs_key)
             blob.upload_from_filename(file_path)
-            return contents, "gs://" + self.bucket_name + "/" + filename
+            return contents, "gs://" + self.bucket_name + "/" + gcs_key
         except GoogleCloudError as e:
             raise RuntimeError(f"Error uploading file to GCS: {e}")
 
     def get_file(self, file_path: str) -> str:
         """Handles downloading of the file from GCS storage."""
         try:
-            filename = file_path.removeprefix("gs://").split("/")[1]
-            local_file_path = f"{UPLOAD_DIR}/{filename}"
-            blob = self.bucket.get_blob(filename)
+            after_gs = file_path.removeprefix("gs://")
+            parts = after_gs.split("/", 1)
+            key = parts[1] if len(parts) > 1 else after_gs
+            suffix = key[len("uploads/"):] if key.startswith("uploads/") else key
+            local_file_path = os.path.join(UPLOAD_DIR, suffix)
+            os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
+            blob = self.bucket.get_blob(key)
             blob.download_to_filename(local_file_path)
-
             return local_file_path
         except NotFound as e:
             raise RuntimeError(f"Error downloading file from GCS: {e}")
@@ -298,8 +308,10 @@ class GCSStorageProvider(StorageProvider):
     def delete_file(self, file_path: str) -> None:
         """Handles deletion of the file from GCS storage."""
         try:
-            filename = file_path.removeprefix("gs://").split("/")[1]
-            blob = self.bucket.get_blob(filename)
+            after_gs = file_path.removeprefix("gs://")
+            parts = after_gs.split("/", 1)
+            key = parts[1] if len(parts) > 1 else after_gs
+            blob = self.bucket.get_blob(key)
             blob.delete()
         except NotFound as e:
             raise RuntimeError(f"Error deleting file from GCS: {e}")
