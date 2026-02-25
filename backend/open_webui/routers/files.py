@@ -297,6 +297,7 @@ def upload_file_handler(
             base_dir=target_dir,
         )
 
+        is_structured = _is_structured_extension(file_extension)
         file_item = Files.insert_new_file(
             user.id,
             FileForm(
@@ -304,6 +305,13 @@ def upload_file_handler(
                     "id": id,
                     "filename": name,
                     "path": file_path,
+                    "mime_type": (
+                        file.content_type
+                        if isinstance(file.content_type, str)
+                        else None
+                    ),
+                    "file_size": len(contents),
+                    "is_structured": is_structured,
                     "data": {
                         **({"status": "pending"} if process else {}),
                     },

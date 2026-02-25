@@ -5,7 +5,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from open_webui.internal.db import Base, JSONField, get_db, get_db_context
 from pydantic import BaseModel, ConfigDict, model_validator
-from sqlalchemy import BigInteger, Column, String, Text, JSON
+from sqlalchemy import BigInteger, Boolean, Column, String, Text, JSON
 
 log = logging.getLogger(__name__)
 
@@ -23,6 +23,10 @@ class File(Base):
     filename = Column(Text)
     path = Column(Text, nullable=True)
 
+    mime_type = Column(Text, nullable=True)
+    file_size = Column(BigInteger, nullable=True)
+    is_structured = Column(Boolean, nullable=True)
+
     data = Column(JSON, nullable=True)
     meta = Column(JSON, nullable=True)
 
@@ -39,6 +43,10 @@ class FileModel(BaseModel):
 
     filename: str
     path: Optional[str] = None
+
+    mime_type: Optional[str] = None
+    file_size: Optional[int] = None
+    is_structured: Optional[bool] = None
 
     data: Optional[dict] = None
     meta: Optional[dict] = None
@@ -85,6 +93,9 @@ class FileModelResponse(BaseModel):
     hash: Optional[str] = None
 
     filename: str
+    mime_type: Optional[str] = None
+    file_size: Optional[int] = None
+    is_structured: Optional[bool] = None
     data: Optional[dict] = None
     meta: FileMeta
 
@@ -107,6 +118,9 @@ class FileForm(BaseModel):
     hash: Optional[str] = None
     filename: str
     path: str
+    mime_type: Optional[str] = None
+    file_size: Optional[int] = None
+    is_structured: Optional[bool] = None
     data: dict = {}
     meta: dict = {}
 

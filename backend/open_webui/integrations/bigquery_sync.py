@@ -47,13 +47,16 @@ def _ensure_dataset_and_tables(client) -> None:
 
     dataset_ref = dataset_ref_str
 
-    # file: id, user_id, hash, filename, path, data (JSON string), meta (JSON string), created_at, updated_at
+    # file: id, user_id, hash, filename, path, mime_type, file_size, is_structured, data, meta, created_at, updated_at
     file_schema = [
         SchemaField("id", "STRING", mode="REQUIRED"),
         SchemaField("user_id", "STRING", mode="NULLABLE"),
         SchemaField("hash", "STRING", mode="NULLABLE"),
         SchemaField("filename", "STRING", mode="NULLABLE"),
         SchemaField("path", "STRING", mode="NULLABLE"),
+        SchemaField("mime_type", "STRING", mode="NULLABLE"),
+        SchemaField("file_size", "INTEGER", mode="NULLABLE"),
+        SchemaField("is_structured", "BOOL", mode="NULLABLE"),
         SchemaField("data", "STRING", mode="NULLABLE"),
         SchemaField("meta", "STRING", mode="NULLABLE"),
         SchemaField("created_at", "INTEGER", mode="NULLABLE"),
@@ -61,7 +64,16 @@ def _ensure_dataset_and_tables(client) -> None:
     ]
     file_table_id = f"{dataset_ref_str}.file"
     try:
-        client.get_table(file_table_id)
+        existing = client.get_table(file_table_id)
+        existing_fields = {f.name for f in existing.schema}
+        for field in file_schema:
+            if field.name not in existing_fields:
+                try:
+                    client.query(
+                        f"ALTER TABLE `{file_table_id}` ADD COLUMN {field.name} {field.field_type}"
+                    ).result()
+                except Exception as alter_err:
+                    log.debug("BigQuery add column %s: %s", field.name, alter_err)
     except Exception:
         client.create_table(Table(file_table_id, schema=file_schema), exists_ok=True)
 
@@ -133,15 +145,24 @@ def sync_file(file_item: Any) -> None:
         row = fd.model_dump() if hasattr(fd, "model_dump") else fd
         data_str = json.dumps(row.get("data") or {})
         meta_str = json.dumps(row.get("meta") or {})
+        mime_type = row.get("mime_type") or ""
+        file_size = row.get("file_size")
+        if file_size is None:
+            file_size = 0
+        is_structured = row.get("is_structured")
+        if is_structured is None:
+            is_structured = False
         query = f"""
         MERGE `{dataset_ref}.file` T
         USING (SELECT @id AS id, @user_id AS user_id, @hash AS hash, @filename AS filename,
-               @path AS path, @data AS data, @meta AS meta, @created_at AS created_at, @updated_at AS updated_at) S
+               @path AS path, @mime_type AS mime_type, @file_size AS file_size, @is_structured AS is_structured,
+               @data AS data, @meta AS meta, @created_at AS created_at, @updated_at AS updated_at) S
         ON T.id = S.id
         WHEN MATCHED THEN UPDATE SET user_id=S.user_id, hash=S.hash, filename=S.filename, path=S.path,
+            mime_type=S.mime_type, file_size=S.file_size, is_structured=S.is_structured,
             data=S.data, meta=S.meta, updated_at=S.updated_at
-        WHEN NOT MATCHED THEN INSERT (id, user_id, hash, filename, path, data, meta, created_at, updated_at)
-            VALUES (S.id, S.user_id, S.hash, S.filename, S.path, S.data, S.meta, S.created_at, S.updated_at)
+        WHEN NOT MATCHED THEN INSERT (id, user_id, hash, filename, path, mime_type, file_size, is_structured, data, meta, created_at, updated_at)
+            VALUES (S.id, S.user_id, S.hash, S.filename, S.path, S.mime_type, S.file_size, S.is_structured, S.data, S.meta, S.created_at, S.updated_at)
         """
         job_config = bigquery.QueryJobConfig(
             query_parameters=[
@@ -150,6 +171,9 @@ def sync_file(file_item: Any) -> None:
                 bigquery.ScalarQueryParameter("hash", "STRING", row.get("hash") or ""),
                 bigquery.ScalarQueryParameter("filename", "STRING", row.get("filename") or ""),
                 bigquery.ScalarQueryParameter("path", "STRING", row.get("path") or ""),
+                bigquery.ScalarQueryParameter("mime_type", "STRING", mime_type),
+                bigquery.ScalarQueryParameter("file_size", "INT64", file_size),
+                bigquery.ScalarQueryParameter("is_structured", "BOOL", is_structured),
                 bigquery.ScalarQueryParameter("data", "STRING", data_str),
                 bigquery.ScalarQueryParameter("meta", "STRING", meta_str),
                 bigquery.ScalarQueryParameter("created_at", "INT64", row.get("created_at") or 0),
