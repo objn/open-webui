@@ -416,7 +416,8 @@ ${content}
 			status: 'uploading',
 			size: file.size,
 			error: '',
-			itemId: tempItemId
+			itemId: tempItemId,
+			progress: undefined as number | undefined
 		};
 
 		if (fileItem.size == 0) {
@@ -446,7 +447,15 @@ ${content}
 			}
 
 			// During the file upload, file content is automatically extracted.
-			const uploadedFile = await uploadFile(localStorage.token, file, metadata);
+			const onProgress = (data: { status?: string; progress?: number; current?: number; total?: number }) => {
+				if (data?.status === 'in_progress') {
+					const pct = data.progress != null ? data.progress : (data.total && data.total > 0 && data.current != null ? Math.round(100 * data.current / data.total) : undefined);
+					if (pct != null) {
+						files = files.map((item) => item?.itemId === tempItemId ? { ...item, progress: pct } : item);
+					}
+				}
+			};
+			const uploadedFile = await uploadFile(localStorage.token, file, metadata, undefined, onProgress);
 
 			if (uploadedFile) {
 				console.log('File upload completed:', uploadedFile);

@@ -273,7 +273,8 @@
 			size: file.size,
 			status: 'uploading',
 			error: '',
-			itemId: uuidv4()
+			itemId: uuidv4(),
+			progress: undefined as number | undefined
 		};
 
 		if (fileItem.size == 0) {
@@ -310,7 +311,13 @@
 					: {})
 			};
 
-			const uploadedFile = await uploadFile(localStorage.token, file, metadata).catch((e) => {
+			const onProgress = (data: { status?: string; progress?: number; current?: number; total?: number }) => {
+				if (data?.status === 'in_progress') {
+					const pct = data.progress != null ? data.progress : (data.total && data.total > 0 && data.current != null ? Math.round(100 * data.current / data.total) : undefined);
+					fileItems = fileItems.map((item) => item?.itemId === fileItem.itemId ? { ...item, progress: pct ?? item.progress, current: data.current, total: data.total } : item);
+				}
+			};
+			const uploadedFile = await uploadFile(localStorage.token, file, metadata, undefined, onProgress).catch((e) => {
 				toast.error(`${e}`);
 				return null;
 			});

@@ -193,12 +193,24 @@ class Loader:
         loader = self._get_loader(filename, file_content_type, file_path)
         docs = loader.load()
 
-        return [
+        result = [
             Document(
                 page_content=ftfy.fix_text(doc.page_content), metadata=doc.metadata
             )
             for doc in docs
         ]
+
+        # For CSV/Excel, drop rows that are entirely empty so embedding count matches real data
+        # (avoids 999 batches when the table only has 100 data rows)
+        file_ext = filename.split(".")[-1].lower() if filename else ""
+        if file_ext in ("csv", "xlsx", "xls"):
+            result = [
+                doc
+                for doc in result
+                if doc.page_content and doc.page_content.strip()
+            ]
+
+        return result
 
     def _is_text_file(self, file_ext: str, file_content_type: str) -> bool:
         return file_ext in known_source_ext or (

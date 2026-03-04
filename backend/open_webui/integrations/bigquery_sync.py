@@ -10,7 +10,15 @@ import random
 import string
 from typing import Any, Optional
 
-from open_webui.config import BIGQUERY_DATASET, BIGQUERY_ENABLED, BIGQUERY_PROJECT
+from open_webui.config import (
+    BIGQUERY_DATASET,
+    BIGQUERY_ENABLED,
+    BIGQUERY_PROJECT,
+    BIGQUERY_IMPORT_GCS_ENABLED,
+    BIGQUERY_GCS_IMPORT_BUCKET,
+    BIGQUERY_GCS_IMPORT_PREFIX,
+    GCS_BUCKET_NAME,
+)
 
 log = logging.getLogger(__name__)
 
@@ -144,13 +152,21 @@ def _generate_temp_table_id() -> str:
     return f"bq_temp_{suffix}"
 
 
+def _get_gcs_import_bucket():
+    """Return bucket name for BigQuery import via GCS, or None if not configured."""
+    if BIGQUERY_GCS_IMPORT_BUCKET:
+        return BIGQUERY_GCS_IMPORT_BUCKET
+    return GCS_BUCKET_NAME or None
+
+
 def import_structured_file_to_bigquery(local_path: str, table_id: Optional[str] = None) -> Optional[dict]:
     """Import a local structured file (CSV or Excel) into a temporary BigQuery table.
 
     Excel (xlsx, xls) is converted to CSV. CSV is validated for BigQuery (UTF-8,
-    valid column names, consistent row length). Returns a dict with project, dataset,
-    table_id, row_count, and schema (list of column defs), or None if BigQuery is
-    disabled or the client is not available.
+    valid column names, consistent row length). When BIGQUERY_IMPORT_GCS_ENABLED=true,
+    the prepared CSV is uploaded to GCS and BigQuery loads from gs:// (faster).
+    Returns a dict with project, dataset, table_id, row_count, and schema (list of column defs),
+    or None if BigQuery is disabled or the client is not available.
     """
     from open_webui.integrations.bigquery_structured import prepare_structured_file_for_bigquery
 
@@ -161,6 +177,8 @@ def import_structured_file_to_bigquery(local_path: str, table_id: Optional[str] 
     path_to_load, cleanup_path, prep_error = prepare_structured_file_for_bigquery(local_path)
     if prep_error:
         raise ValueError(prep_error)
+
+    use_gcs = BIGQUERY_IMPORT_GCS_ENABLED and _get_gcs_import_bucket()
 
     try:
         from google.cloud import bigquery
@@ -179,8 +197,29 @@ def import_structured_file_to_bigquery(local_path: str, table_id: Optional[str] 
             skip_leading_rows=1,
         )
 
-        with open(path_to_load, "rb") as f:
-            load_job = client.load_table_from_file(f, full_table_id, job_config=job_config)
+        if use_gcs:
+            from google.cloud import storage as gcs_storage
+
+            bucket_name = _get_gcs_import_bucket()
+            gcs_client = gcs_storage.Client(project=BIGQUERY_PROJECT)
+            bucket = gcs_client.bucket(bucket_name)
+            blob_key = (
+                f"{BIGQUERY_GCS_IMPORT_PREFIX}/{table_id}.csv"
+                if BIGQUERY_GCS_IMPORT_PREFIX
+                else f"{table_id}.csv"
+            )
+            blob = bucket.blob(blob_key)
+            blob.upload_from_filename(path_to_load, content_type="text/csv")
+            source_uri = f"gs://{bucket_name}/{blob_key}"
+            load_job = client.load_table_from_uri(
+                source_uri, full_table_id, job_config=job_config
+            )
+        else:
+            with open(path_to_load, "rb") as f:
+                load_job = client.load_table_from_file(
+                    f, full_table_id, job_config=job_config
+                )
+
         load_job.result()
 
         table = client.get_table(full_table_id)

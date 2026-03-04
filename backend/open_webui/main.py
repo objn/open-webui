@@ -57,6 +57,10 @@ from starsessions import (
 )
 from starsessions.stores.redis import RedisStore
 
+# Create SQLAlchemy tables (e.g. config) before any open_webui code that reads config
+from open_webui.internal.db import ensure_sqlalchemy_tables
+ensure_sqlalchemy_tables()
+
 from open_webui.utils import logger
 from open_webui.utils.audit import AuditLevel, AuditLoggingMiddleware
 from open_webui.utils.logger import start_logger
@@ -107,9 +111,7 @@ from open_webui.routers.retrieval import (
 
 
 from sqlalchemy.orm import Session
-from open_webui.internal.db import ScopedSession, engine, get_session, ensure_sqlalchemy_tables
-
-ensure_sqlalchemy_tables()
+from open_webui.internal.db import ScopedSession, engine, get_session
 
 from open_webui.models.functions import Functions
 from open_webui.models.models import Models

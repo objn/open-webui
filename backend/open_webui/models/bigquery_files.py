@@ -1,6 +1,6 @@
 import logging
 import time
-from typing import Optional, List
+from typing import Optional, List, Union
 
 from sqlalchemy import BigInteger, Column, ForeignKey, Text, JSON, UniqueConstraint
 from sqlalchemy.orm import Session
@@ -41,7 +41,7 @@ class BigQueryFileModel(BaseModel):
     dataset: str
     table_id: str
 
-    schema: Optional[dict] = None
+    schema: Optional[Union[dict, List[dict]]] = None
     row_count: Optional[int] = None
 
     created_at: int
@@ -80,7 +80,7 @@ class BigQueryFilesTable:
         project: str,
         dataset: str,
         table_id: str,
-        schema: Optional[dict] = None,
+        schema: Optional[Union[dict, List[dict]]] = None,
         row_count: Optional[int] = None,
         db: Optional[Session] = None,
     ) -> Optional[BigQueryFileModel]:

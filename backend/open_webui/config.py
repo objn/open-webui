@@ -917,7 +917,8 @@ S3_ADDRESSING_STYLE = os.environ.get("S3_ADDRESSING_STYLE", None)
 S3_ENABLE_TAGGING = os.getenv("S3_ENABLE_TAGGING", "false").lower() == "true"
 
 GCS_BUCKET_NAME = os.environ.get("GCS_BUCKET_NAME", None)
-GCS_KEY_PREFIX = os.environ.get("GCS_KEY_PREFIX", "").rstrip("/")  # e.g. "openwebui" -> objects under openwebui/
+# Default "openwebui" so all objects live under gs://bucket/openwebui/ (set GCS_KEY_PREFIX to override).
+GCS_KEY_PREFIX = os.environ.get("GCS_KEY_PREFIX", "openwebui").strip().rstrip("/")
 GOOGLE_APPLICATION_CREDENTIALS_JSON = os.environ.get(
     "GOOGLE_APPLICATION_CREDENTIALS_JSON", None
 )
@@ -945,6 +946,16 @@ UNSTRUCTURED_DIR.mkdir(parents=True, exist_ok=True)
 BIGQUERY_ENABLED = os.environ.get("BIGQUERY_ENABLED", "false").lower() == "true"
 BIGQUERY_PROJECT = os.environ.get("BIGQUERY_PROJECT", "")
 BIGQUERY_DATASET = os.environ.get("BIGQUERY_DATASET", "")
+
+# When true, prepared CSV is uploaded to GCS and BigQuery loads from gs:// (faster, no stream through app).
+# Requires BIGQUERY_GCS_IMPORT_BUCKET or GCS_BUCKET_NAME to be set.
+BIGQUERY_IMPORT_GCS_ENABLED = (
+    os.environ.get("BIGQUERY_IMPORT_GCS_ENABLED", "false").lower() == "true"
+)
+BIGQUERY_GCS_IMPORT_BUCKET = os.environ.get("BIGQUERY_GCS_IMPORT_BUCKET", "").strip()
+BIGQUERY_GCS_IMPORT_PREFIX = (
+    os.environ.get("BIGQUERY_GCS_IMPORT_PREFIX", "bigquery_import").strip().rstrip("/")
+)
 
 ####################################
 # Cache DIR

@@ -54,6 +54,7 @@
 						type={file.type}
 						size={file?.size}
 						loading={file.status === 'uploading'}
+						progress={file.status === 'uploading' ? file.progress : undefined}
 						on:dismiss={() => {
 							// Remove the file from the files array
 							files = files.filter((item) => item.id !== file.id);

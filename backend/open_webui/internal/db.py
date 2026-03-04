@@ -19,6 +19,7 @@ from open_webui.env import (
 )
 from peewee_migrate import Router
 from sqlalchemy import Dialect, create_engine, MetaData, event, types, Column, Integer, DateTime, func, JSON
+from sqlalchemy import inspect as sa_inspect, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import scoped_session, sessionmaker, Session
 from sqlalchemy.pool import QueuePool, NullPool
@@ -53,7 +54,7 @@ class JSONField(types.TypeDecorator):
 # Workaround to handle the peewee migration
 # This is required to ensure the peewee migration is handled before the alembic migration
 def handle_peewee_migration(DATABASE_URL):
-    # db = None
+    db = None
     try:
         # Replace the postgresql:// with postgres:// to handle the peewee migration
         db = register_connection(DATABASE_URL.replace("postgresql://", "postgres://"))
@@ -70,11 +71,12 @@ def handle_peewee_migration(DATABASE_URL):
         raise
     finally:
         # Properly closing the database connection
-        if db and not db.is_closed():
+        if db is not None and not db.is_closed():
             db.close()
 
-        # Assert if db connection has been closed
-        assert db.is_closed(), "Database connection is still open."
+        # Assert if db connection has been closed (only when db was created)
+        if db is not None:
+            assert db.is_closed(), "Database connection is still open."
 
 
 if ENABLE_DB_MIGRATIONS:
@@ -164,7 +166,9 @@ class Config(Base):
 
 
 def ensure_sqlalchemy_tables():
-    """Create all SQLAlchemy tables if they do not exist (e.g. fresh DB)."""
+    """Create all SQLAlchemy tables if they do not exist (e.g. fresh DB).
+    Also add missing columns to tables already created by Peewee (e.g. user.username).
+    """
     # Import all modules that register models with Base so metadata is complete
     from open_webui.models import (
         access_grants,
@@ -192,6 +196,39 @@ def ensure_sqlalchemy_tables():
         users,
     )
     Base.metadata.create_all(bind=engine)
+    _add_missing_columns_to_existing_tables()
+
+
+def _add_missing_columns_to_existing_tables():
+    """Add columns from SQLAlchemy models that are missing in DB (e.g. Peewee-created tables)."""
+    inspector = sa_inspect(engine)
+    schema = DATABASE_SCHEMA or None
+    if schema:
+        table_names = inspector.get_table_names(schema=schema)
+    else:
+        table_names = inspector.get_table_names()
+
+    for table_name, table_obj in Base.metadata.tables.items():
+        if table_name not in table_names:
+            continue
+        existing = {c["name"] for c in inspector.get_columns(table_name, schema=schema)}
+        for col in table_obj.c:
+            if col.name in existing:
+                continue
+            try:
+                col_type = col.type.compile(engine.dialect)
+                raw_sql = 'ALTER TABLE {schema}"{table}" ADD COLUMN "{col}" {col_type}'.format(
+                    schema=f'"{schema}".' if schema else "",
+                    table=table_name,
+                    col=col.name,
+                    col_type=col_type,
+                )
+                with engine.connect() as conn:
+                    conn.execute(text(raw_sql))
+                    conn.commit()
+                log.info("Added missing column %s.%s", table_name, col.name)
+            except Exception as e:
+                log.warning("Could not add column %s.%s: %s", table_name, col.name, e)
 
 
 def get_session():

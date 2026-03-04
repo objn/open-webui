@@ -9,7 +9,7 @@ import re
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Iterator, List, Optional, Sequence, Union
+from typing import Iterator, List, Optional, Sequence, Union, Callable
 
 from fastapi import (
     Depends,
@@ -1433,6 +1433,7 @@ def save_docs_to_vector_db(
     split: bool = True,
     add: bool = False,
     user=None,
+    progress_callback: Optional[Callable[[int, int], None]] = None,
 ) -> bool:
     def _get_docs_info(docs: list[Document]) -> str:
         docs_info = set()
@@ -1591,6 +1592,7 @@ def save_docs_to_vector_db(
                 else None
             ),
             enable_async=request.app.state.config.ENABLE_ASYNC_EMBEDDING,
+            progress_callback=progress_callback,
         )
 
         # Run async embedding in sync context using the main event loop
@@ -1814,6 +1816,28 @@ def process_file(
                     # Note: file is already a Pydantic model (not ORM), so no expunge needed.
                     db.commit()
 
+                    file_id_for_progress = file.id
+
+                    def _progress_callback(current: int, total: int):
+                        with get_db() as session:
+                            Files.update_file_data_by_id(
+                                file_id_for_progress,
+                                {
+                                    "status": "in_progress",
+                                    "progress": round(100 * current / total) if total else 0,
+                                    "current": current,
+                                    "total": total,
+                                },
+                                db=session,
+                            )
+
+                    with get_db() as session:
+                        Files.update_file_data_by_id(
+                            file.id,
+                            {"status": "in_progress", "progress": 0, "current": 0, "total": 0},
+                            db=session,
+                        )
+
                     # External embedding API takes time (5-60s+).
                     # Subsequent updates use fresh sessions via get_db().
                     result = save_docs_to_vector_db(
@@ -1827,6 +1851,7 @@ def process_file(
                         },
                         add=(True if form_data.collection_name else False),
                         user=user,
+                        progress_callback=_progress_callback,
                     )
                     log.info(f"added {len(docs)} items to collection {collection_name}")
 

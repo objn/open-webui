@@ -217,29 +217,33 @@ def _import_structured_file_to_bigquery_task(
     file_path: str,
     db: Optional[Session] = None,
 ):
+    """Import structured file (CSV/Excel) to BigQuery. Disables console progress (tqdm) for this task only, without setting env."""
+    _original_tqdm = None
     try:
-        local_path = Storage.get_file(file_path)
-    except Exception as e:
-        log.exception("Failed to resolve structured file path for BigQuery import: %s", e)
-        return
+        import tqdm as _tqdm_mod
+        _original_tqdm = _tqdm_mod.tqdm
+
+        def _tqdm_disabled(*args, **kwargs):
+            kwargs["disable"] = True
+            return _original_tqdm(*args, **kwargs)
+
+        _tqdm_mod.tqdm = _tqdm_disabled
+    except ImportError:
+        pass
 
     try:
-        result = import_structured_file_to_bigquery(local_path)
-        if not result:
+        try:
+            local_path = Storage.get_file(file_path)
+        except Exception as e:
+            log.exception("Failed to resolve structured file path for BigQuery import: %s", e)
             return
 
-        if db:
-            BigQueryFiles.upsert_for_file(
-                file_id=file_id,
-                project=result["project"],
-                dataset=result["dataset"],
-                table_id=result["table_id"],
-                schema=result.get("schema"),
-                row_count=result.get("row_count"),
-                db=db,
-            )
-        else:
-            with SessionLocal() as db_session:
+        try:
+            result = import_structured_file_to_bigquery(local_path)
+            if not result:
+                return
+
+            if db:
                 BigQueryFiles.upsert_for_file(
                     file_id=file_id,
                     project=result["project"],
@@ -247,32 +251,50 @@ def _import_structured_file_to_bigquery_task(
                     table_id=result["table_id"],
                     schema=result.get("schema"),
                     row_count=result.get("row_count"),
-                    db=db_session,
-                )
-    except Exception as e:
-        log.exception("Error importing structured file to BigQuery: %s", e)
-        try:
-            if db:
-                Files.update_file_data_by_id(
-                    file_id,
-                    {
-                        "bigquery_import_status": "failed",
-                        "bigquery_import_error": str(e),
-                    },
                     db=db,
                 )
             else:
                 with SessionLocal() as db_session:
+                    BigQueryFiles.upsert_for_file(
+                        file_id=file_id,
+                        project=result["project"],
+                        dataset=result["dataset"],
+                        table_id=result["table_id"],
+                        schema=result.get("schema"),
+                        row_count=result.get("row_count"),
+                        db=db_session,
+                    )
+        except Exception as e:
+            log.exception("Error importing structured file to BigQuery: %s", e)
+            try:
+                if db:
                     Files.update_file_data_by_id(
                         file_id,
                         {
                             "bigquery_import_status": "failed",
                             "bigquery_import_error": str(e),
                         },
-                        db=db_session,
+                        db=db,
                     )
-        except Exception:
-            log.debug("Failed to record BigQuery import failure status for file %s", file_id)
+                else:
+                    with SessionLocal() as db_session:
+                        Files.update_file_data_by_id(
+                            file_id,
+                            {
+                                "bigquery_import_status": "failed",
+                                "bigquery_import_error": str(e),
+                            },
+                            db=db_session,
+                        )
+            except Exception:
+                log.debug("Failed to record BigQuery import failure status for file %s", file_id)
+    finally:
+        if _original_tqdm is not None:
+            try:
+                import tqdm as _tqdm_mod
+                _tqdm_mod.tqdm = _original_tqdm
+            except ImportError:
+                pass
 
 
 @router.post("/", response_model=FileModelResponse)
@@ -637,6 +659,13 @@ async def get_file_process_status(
                             event = {"status": status}
                             if status == "failed":
                                 event["error"] = data.get("error")
+                            if status == "in_progress":
+                                if data.get("progress") is not None:
+                                    event["progress"] = data.get("progress")
+                                if data.get("current") is not None:
+                                    event["current"] = data.get("current")
+                                if data.get("total") is not None:
+                                    event["total"] = data.get("total")
 
                             yield f"data: {json.dumps(event)}\n\n"
                             if status in ("completed", "failed"):
@@ -655,7 +684,16 @@ async def get_file_process_status(
                 media_type="text/event-stream",
             )
         else:
-            return {"status": file.data.get("status", "pending")}
+            resp = {"status": file.data.get("status", "pending")}
+            if file.data.get("progress") is not None:
+                resp["progress"] = file.data.get("progress")
+            if file.data.get("current") is not None:
+                resp["current"] = file.data.get("current")
+            if file.data.get("total") is not None:
+                resp["total"] = file.data.get("total")
+            if file.data.get("status") == "failed" and file.data.get("error"):
+                resp["error"] = file.data.get("error")
+            return resp
     else:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

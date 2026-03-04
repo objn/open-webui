@@ -49,10 +49,18 @@
 							{/if}
 						</div>
 
-						<div class="line-clamp-1 text-sm">
+						<div class="line-clamp-1 text-sm flex-1 min-w-0">
 							{file?.name ?? file?.meta?.name}
 							{#if file?.meta?.size}
 								<span class="text-xs text-gray-500">{formatFileSize(file?.meta?.size)}</span>
+							{/if}
+							{#if file?.status === 'uploading' && (file?.progress != null || (file?.total != null && file?.total > 0 && file?.current != null))}
+								<div class="mt-1 h-1 w-full max-w-[120px] rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+									<div
+										class="h-full rounded-full bg-primary-500 dark:bg-primary-400 transition-[width] duration-200"
+										style="width: {(file?.progress != null ? file.progress : Math.round(100 * (file?.current ?? 0) / (file?.total ?? 1)))}%"
+									></div>
+								</div>
 							{/if}
 						</div>
 					</div>

@@ -22,6 +22,8 @@
 	export let dismissible = false;
 	export let modal = false;
 	export let loading = false;
+	/** When loading, optional 0-100 progress for progress bar */
+	export let progress: number | undefined = undefined;
 
 	export let item = null;
 	export let edit = false;
@@ -97,10 +99,10 @@
 						d="M12.971 1.816A5.23 5.23 0 0 1 14.25 5.25v1.875c0 .207.168.375.375.375H16.5a5.23 5.23 0 0 1 3.434 1.279 9.768 9.768 0 0 0-6.963-6.963Z"
 					/>
 				</svg>
-			{:else}
-				<Spinner />
-			{/if}
-		</div>
+	{:else}
+		<Spinner />
+	{/if}
+</div>
 	{:else}
 		<div class="pl-1.5">
 			{#if !loading}
@@ -131,6 +133,15 @@
 			{:else}
 				<Spinner />
 			{/if}
+		</div>
+	{/if}
+
+	{#if loading && progress != null && progress >= 0 && progress <= 100}
+		<div class="mt-1 h-1 w-full rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+			<div
+				class="h-full rounded-full bg-primary-500 dark:bg-primary-400 transition-[width] duration-200"
+				style="width: {progress}%"
+			></div>
 		</div>
 	{/if}
 

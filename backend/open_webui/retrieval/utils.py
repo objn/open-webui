@@ -1,6 +1,6 @@
 import logging
 import os
-from typing import Awaitable, Optional, Union
+from typing import Awaitable, Callable, Optional, Union
 
 import requests
 import aiohttp
@@ -803,11 +803,14 @@ def get_embedding_function(
     embedding_batch_size,
     azure_api_version=None,
     enable_async=True,
+    progress_callback: Optional[Callable[[int, int], None]] = None,
 ) -> Awaitable:
     if embedding_engine == "":
         # Sentence transformers: CPU-bound sync operation
         async def async_embedding_function(query, prefix=None, user=None):
-            return await asyncio.to_thread(
+            if progress_callback:
+                progress_callback(0, 1)
+            result = await asyncio.to_thread(
                 (
                     lambda query, prefix=None: embedding_function.encode(
                         query,
@@ -818,6 +821,9 @@ def get_embedding_function(
                 query,
                 prefix,
             )
+            if progress_callback:
+                progress_callback(1, 1)
+            return result
 
         return async_embedding_function
     elif embedding_engine in ["ollama", "openai", "azure_openai"]:
@@ -839,6 +845,9 @@ def get_embedding_function(
                     query[i : i + embedding_batch_size]
                     for i in range(0, len(query), embedding_batch_size)
                 ]
+                total_batches = len(batches)
+                if progress_callback:
+                    progress_callback(0, total_batches)
 
                 if enable_async:
                     log.debug(
@@ -850,15 +859,19 @@ def get_embedding_function(
                         for batch in batches
                     ]
                     batch_results = await asyncio.gather(*tasks)
+                    if progress_callback:
+                        progress_callback(total_batches, total_batches)
                 else:
                     log.debug(
                         f"generate_multiple_async: Processing {len(batches)} batches sequentially"
                     )
                     batch_results = []
-                    for batch in batches:
+                    for i, batch in enumerate(batches):
                         batch_results.append(
                             await embedding_function(batch, prefix=prefix, user=user)
                         )
+                        if progress_callback:
+                            progress_callback(i + 1, total_batches)
 
                 # Flatten results
                 embeddings = []

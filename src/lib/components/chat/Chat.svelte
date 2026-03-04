@@ -711,7 +711,8 @@
 			status: 'uploading',
 			error: '',
 			itemId: tempItemId,
-			size: 0
+			size: 0,
+			progress: undefined as number | undefined
 		};
 
 		try {
@@ -781,7 +782,15 @@
 
 			// Upload file to server
 			console.log('Uploading file to server...');
-			const uploadedFile = await uploadFile(localStorage.token, file, metadata);
+			const onProgress = (data: { status?: string; progress?: number; current?: number; total?: number }) => {
+				if (data?.status === 'in_progress') {
+					const pct = data.progress != null ? data.progress : (data.total && data.total > 0 && data.current != null ? Math.round(100 * data.current / data.total) : undefined);
+					if (pct != null) {
+						files = files.map((item) => item?.itemId === tempItemId ? { ...item, progress: pct } : item);
+					}
+				}
+			};
+			const uploadedFile = await uploadFile(localStorage.token, file, metadata, undefined, onProgress);
 
 			if (!uploadedFile) {
 				throw new Error('Server returned null response for file upload');

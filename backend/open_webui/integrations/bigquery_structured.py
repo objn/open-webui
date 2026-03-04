@@ -107,6 +107,7 @@ def _validate_and_sanitize_csv(
 
     row_count = 0
     rows_ok = []
+    skipped_empty = False
     for row in reader:
         row_count += 1
         if row_count > max_rows:
@@ -116,11 +117,14 @@ def _validate_and_sanitize_csv(
                 f"Row {row_count + 1} has {len(row)} columns, expected {num_cols}. "
                 "All rows must have the same number of columns."
             )
+        if all((cell or "").strip() == "" for cell in row):
+            skipped_empty = True
+            continue
         rows_ok.append(row)
 
-    # If we only changed headers (sanitized), write temp file for BigQuery
+    # If we only changed headers (sanitized) or skipped empty rows, write temp file for BigQuery
     original_headers = header_row
-    needs_rewrite = any(a != b for a, b in zip(original_headers, sanitized_headers))
+    needs_rewrite = any(a != b for a, b in zip(original_headers, sanitized_headers)) or skipped_empty
 
     if not needs_rewrite:
         return csv_path, None, None
@@ -162,6 +166,8 @@ def excel_to_csv(excel_path: str) -> Tuple[Optional[str], Optional[str]]:
 
     if df.empty and len(df.columns) == 0:
         return None, "Excel sheet is empty."
+
+    df = df.dropna(how="all")
 
     fd, temp_path = tempfile.mkstemp(suffix=".csv", prefix="bq_excel_")
     try:
