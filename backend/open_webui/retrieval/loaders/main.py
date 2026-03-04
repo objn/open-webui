@@ -89,6 +89,28 @@ known_source_ext = [
 ]
 
 
+def _csv_loader_row_is_empty(content: str) -> bool:
+    """
+    CSVLoader formats each row as 'col1: val1\\ncol2: val2\\n...'.
+    Empty rows become 'upc: \\ndollar_sales: \\n...' (only headers, values empty).
+    Return True if every line has an empty value part (after the first colon).
+    """
+    if not content or not content.strip():
+        return True
+    for line in content.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if ":" in line:
+            value_part = line.split(":", 1)[1].strip()
+            if value_part:
+                return False
+        else:
+            # No colon: treat as having content (e.g. raw text)
+            return False
+    return True
+
+
 class TikaLoader:
     def __init__(self, url, file_path, mime_type=None, extract_images=None):
         self.url = url
@@ -207,7 +229,7 @@ class Loader:
             result = [
                 doc
                 for doc in result
-                if doc.page_content and doc.page_content.strip()
+                if not _csv_loader_row_is_empty(doc.page_content)
             ]
 
         return result
