@@ -113,7 +113,6 @@ from open_webui.models.functions import Functions
 from open_webui.models.models import Models
 from open_webui.models.users import UserModel, Users
 from open_webui.models.chats import Chats
-from open_webui.integrations.bigquery_sync import sync_chat_file as bigquery_sync_chat_file
 
 from open_webui.config import (
     # Ollama
@@ -1769,9 +1768,6 @@ async def chat_completion(
                             ],
                             user.id,
                         )
-                        if chat_files:
-                            for cf in chat_files:
-                                bigquery_sync_chat_file(cf)
                     except Exception as e:
                         log.debug(f"Error inserting chat files: {e}")
                         pass

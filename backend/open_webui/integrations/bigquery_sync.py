@@ -5,13 +5,12 @@ Uses MERGE for upsert-by-primary-key. Runs in fire-and-forget; errors are logged
 """
 import json
 import logging
+import os
+import random
+import string
 from typing import Any, Optional
 
-from open_webui.config import (
-    BIGQUERY_DATASET,
-    BIGQUERY_ENABLED,
-    BIGQUERY_PROJECT,
-)
+from open_webui.config import BIGQUERY_DATASET, BIGQUERY_ENABLED, BIGQUERY_PROJECT
 
 log = logging.getLogger(__name__)
 
@@ -137,6 +136,74 @@ def _ensure_dataset_and_tables(client) -> None:
         client.create_table(
             Table(cf_table_id, schema=chat_file_schema), exists_ok=True
         )
+
+
+def _generate_temp_table_id() -> str:
+    alphabet = string.ascii_letters + string.digits
+    suffix = "".join(random.choices(alphabet, k=16))
+    return f"bq_temp_{suffix}"
+
+
+def import_structured_file_to_bigquery(local_path: str, table_id: Optional[str] = None) -> Optional[dict]:
+    """Import a local structured file (CSV or Excel) into a temporary BigQuery table.
+
+    Excel (xlsx, xls) is converted to CSV. CSV is validated for BigQuery (UTF-8,
+    valid column names, consistent row length). Returns a dict with project, dataset,
+    table_id, row_count, and schema (list of column defs), or None if BigQuery is
+    disabled or the client is not available.
+    """
+    from open_webui.integrations.bigquery_structured import prepare_structured_file_for_bigquery
+
+    client = _get_client()
+    if client is None:
+        return None
+
+    path_to_load, cleanup_path, prep_error = prepare_structured_file_for_bigquery(local_path)
+    if prep_error:
+        raise ValueError(prep_error)
+
+    try:
+        from google.cloud import bigquery
+
+        _ensure_dataset_and_tables(client)
+
+        if table_id is None:
+            table_id = _generate_temp_table_id()
+
+        dataset_ref = f"{BIGQUERY_PROJECT}.{BIGQUERY_DATASET}"
+        full_table_id = f"{dataset_ref}.{table_id}"
+
+        job_config = bigquery.LoadJobConfig(
+            autodetect=True,
+            source_format=bigquery.SourceFormat.CSV,
+            skip_leading_rows=1,
+        )
+
+        with open(path_to_load, "rb") as f:
+            load_job = client.load_table_from_file(f, full_table_id, job_config=job_config)
+        load_job.result()
+
+        table = client.get_table(full_table_id)
+        schema = [
+            {"name": field.name, "type": field.field_type, "mode": field.mode}
+            for field in table.schema
+        ]
+        return {
+            "project": BIGQUERY_PROJECT,
+            "dataset": BIGQUERY_DATASET,
+            "table_id": table_id,
+            "row_count": table.num_rows,
+            "schema": schema,
+        }
+    except Exception as e:
+        log.exception("BigQuery import_structured_file_to_bigquery failed: %s", e)
+        raise
+    finally:
+        if cleanup_path and os.path.exists(cleanup_path):
+            try:
+                os.unlink(cleanup_path)
+            except OSError as e:
+                log.debug("Could not remove temp file %s: %s", cleanup_path, e)
 
 
 def sync_file(file_item: Any) -> None:

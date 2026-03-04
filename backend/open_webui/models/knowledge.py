@@ -80,6 +80,10 @@ class KnowledgeFile(Base):
     file_id = Column(Text, ForeignKey("file.id", ondelete="CASCADE"), nullable=False)
     user_id = Column(Text, nullable=False)
 
+    bigquery_file_id = Column(
+        Text, ForeignKey("bigquery_file.id", ondelete="SET NULL"), nullable=True
+    )
+
     created_at = Column(BigInteger, nullable=False)
     updated_at = Column(BigInteger, nullable=False)
 
@@ -95,6 +99,8 @@ class KnowledgeFileModel(BaseModel):
     knowledge_id: str
     file_id: str
     user_id: str
+
+    bigquery_file_id: Optional[str] = None
 
     created_at: int  # timestamp in epoch
     updated_at: int  # timestamp in epoch
@@ -562,12 +568,17 @@ class KnowledgeTable:
         db: Optional[Session] = None,
     ) -> Optional[KnowledgeFileModel]:
         with get_db_context(db) as db:
+            from open_webui.models.bigquery_files import BigQueryFiles
+
+            bq_file = BigQueryFiles.get_by_file_id(file_id, db=db)
+
             knowledge_file = KnowledgeFileModel(
                 **{
                     "id": str(uuid.uuid4()),
                     "knowledge_id": knowledge_id,
                     "file_id": file_id,
                     "user_id": user_id,
+                    "bigquery_file_id": bq_file.id if bq_file else None,
                     "created_at": int(time.time()),
                     "updated_at": int(time.time()),
                 }
@@ -689,16 +700,7 @@ class KnowledgeTable:
 
 
 def _get_knowledge_backend():
-    """When BIGQUERY_ENABLED=true, use BigQuery for knowledge and knowledge_file (no PostgreSQL)."""
-    try:
-        from open_webui.config import BIGQUERY_ENABLED
-
-        if BIGQUERY_ENABLED:
-            from open_webui.integrations.bigquery_store import KnowledgeTableBigQuery
-
-            return KnowledgeTableBigQuery()
-    except Exception as e:
-        log.debug("BigQuery Knowledges backend not used: %s", e)
+    """Return the default PostgreSQL-backed knowledge table."""
     return KnowledgeTable()
 
 

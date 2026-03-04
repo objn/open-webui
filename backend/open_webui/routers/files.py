@@ -46,12 +46,15 @@ from open_webui.routers.retrieval import ProcessFileForm, process_file
 from open_webui.routers.audio import transcribe
 
 from open_webui.storage.provider import Storage
-from open_webui.config import STRUCTURED_DIR, UNSTRUCTURED_DIR
+from open_webui.config import STRUCTURED_DIR, UNSTRUCTURED_DIR, BIGQUERY_ENABLED
 
 
 from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.misc import strict_match_mime_type
 from pydantic import BaseModel
+
+from open_webui.integrations.bigquery_sync import import_structured_file_to_bigquery
+from open_webui.models.bigquery_files import BigQueryFiles
 
 log = logging.getLogger(__name__)
 
@@ -209,6 +212,69 @@ def process_uploaded_file(
             _process_handler(db_session)
 
 
+def _import_structured_file_to_bigquery_task(
+    file_id: str,
+    file_path: str,
+    db: Optional[Session] = None,
+):
+    try:
+        local_path = Storage.get_file(file_path)
+    except Exception as e:
+        log.exception("Failed to resolve structured file path for BigQuery import: %s", e)
+        return
+
+    try:
+        result = import_structured_file_to_bigquery(local_path)
+        if not result:
+            return
+
+        if db:
+            BigQueryFiles.upsert_for_file(
+                file_id=file_id,
+                project=result["project"],
+                dataset=result["dataset"],
+                table_id=result["table_id"],
+                schema=result.get("schema"),
+                row_count=result.get("row_count"),
+                db=db,
+            )
+        else:
+            with SessionLocal() as db_session:
+                BigQueryFiles.upsert_for_file(
+                    file_id=file_id,
+                    project=result["project"],
+                    dataset=result["dataset"],
+                    table_id=result["table_id"],
+                    schema=result.get("schema"),
+                    row_count=result.get("row_count"),
+                    db=db_session,
+                )
+    except Exception as e:
+        log.exception("Error importing structured file to BigQuery: %s", e)
+        try:
+            if db:
+                Files.update_file_data_by_id(
+                    file_id,
+                    {
+                        "bigquery_import_status": "failed",
+                        "bigquery_import_error": str(e),
+                    },
+                    db=db,
+                )
+            else:
+                with SessionLocal() as db_session:
+                    Files.update_file_data_by_id(
+                        file_id,
+                        {
+                            "bigquery_import_status": "failed",
+                            "bigquery_import_error": str(e),
+                        },
+                        db=db_session,
+                    )
+        except Exception:
+            log.debug("Failed to record BigQuery import failure status for file %s", file_id)
+
+
 @router.post("/", response_model=FileModelResponse)
 def upload_file(
     request: Request,
@@ -333,6 +399,23 @@ def upload_file_handler(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=ERROR_MESSAGES.DEFAULT("Error uploading file"),
             )
+
+        # For structured files, optionally import into BigQuery for analytics.
+        if is_structured and BIGQUERY_ENABLED:
+            # Import into BigQuery in the background when possible.
+            if background_tasks and process_in_background:
+                background_tasks.add_task(
+                    _import_structured_file_to_bigquery_task,
+                    file_item.id,
+                    file_path,
+                    None,
+                )
+            else:
+                _import_structured_file_to_bigquery_task(
+                    file_item.id,
+                    file_path,
+                    db=db,
+                )
 
         if "channel_id" in file_metadata:
             channel = Channels.get_channel_by_id_and_user_id(

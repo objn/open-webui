@@ -1635,84 +1635,8 @@ class ChatTable:
 
 
 def _get_chats_backend():
-    from open_webui.config import BIGQUERY_ENABLED
-
-    if not BIGQUERY_ENABLED:
-        return ChatTable()
-
-    class ChatsTableWithBigQueryChatFile(ChatTable):
-        """ChatTable that uses BigQuery for chat_file when BIGQUERY_ENABLED."""
-
-        def insert_chat_files(
-            self,
-            chat_id: str,
-            message_id: str,
-            file_ids: list[str],
-            user_id: str,
-            db: Optional[Session] = None,
-        ) -> Optional[list[ChatFileModel]]:
-            if not file_ids:
-                return None
-            from open_webui.integrations.bigquery_sync import (
-                get_chat_files_by_chat_id_and_message_id_bq,
-                insert_chat_files_bq,
-            )
-
-            chat_message_file_ids = [
-                item.file_id
-                for item in get_chat_files_by_chat_id_and_message_id_bq(
-                    chat_id, message_id
-                )
-            ]
-            file_ids = list(
-                set(
-                    [
-                        file_id
-                        for file_id in file_ids
-                        if file_id and file_id not in chat_message_file_ids
-                    ]
-                )
-            )
-            if not file_ids:
-                return None
-            return insert_chat_files_bq(chat_id, message_id, file_ids, user_id)
-
-        def get_chat_files_by_chat_id_and_message_id(
-            self, chat_id: str, message_id: str, db: Optional[Session] = None
-        ) -> list[ChatFileModel]:
-            from open_webui.integrations.bigquery_sync import (
-                get_chat_files_by_chat_id_and_message_id_bq,
-            )
-
-            return get_chat_files_by_chat_id_and_message_id_bq(chat_id, message_id)
-
-        def delete_chat_file(
-            self, chat_id: str, file_id: str, db: Optional[Session] = None
-        ) -> bool:
-            from open_webui.integrations.bigquery_sync import delete_chat_file_bq
-
-            return delete_chat_file_bq(chat_id, file_id)
-
-        def get_shared_chats_by_file_id(
-            self, file_id: str, db: Optional[Session] = None
-        ) -> list[ChatModel]:
-            from open_webui.integrations.bigquery_sync import get_chat_ids_by_file_id_bq
-
-            chat_ids = get_chat_ids_by_file_id_bq(file_id)
-            if not chat_ids:
-                return []
-            with get_db_context(db) as db:
-                all_chats = (
-                    db.query(Chat)
-                    .filter(
-                        Chat.id.in_(chat_ids),
-                        Chat.share_id.isnot(None),
-                    )
-                    .all()
-                )
-                return [ChatModel.model_validate(chat) for chat in all_chats]
-
-    return ChatsTableWithBigQueryChatFile()
+    """Return the default PostgreSQL-backed chat table."""
+    return ChatTable()
 
 
 Chats = _get_chats_backend()

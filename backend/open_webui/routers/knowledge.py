@@ -35,10 +35,6 @@ from open_webui.models.access_grants import AccessGrants, has_public_read_access
 
 from open_webui.config import BYPASS_ADMIN_ACCESS_CONTROL
 from open_webui.models.models import Models, ModelForm
-from open_webui.integrations.bigquery_sync import (
-    sync_knowledge as bigquery_sync_knowledge,
-    sync_knowledge_file as bigquery_sync_knowledge_file,
-)
 
 log = logging.getLogger(__name__)
 
@@ -281,7 +277,6 @@ async def create_new_knowledge(
     knowledge = Knowledges.insert_new_knowledge(user.id, form_data)
 
     if knowledge:
-        bigquery_sync_knowledge(knowledge)
         # Embed knowledge base for semantic search
         await embed_knowledge_base_metadata(
             request,
@@ -501,7 +496,6 @@ async def update_knowledge_by_id(
 
     knowledge = Knowledges.update_knowledge_by_id(id=id, form_data=form_data)
     if knowledge:
-        bigquery_sync_knowledge(knowledge)
         # Re-embed knowledge base for semantic search
         await embed_knowledge_base_metadata(
             request,
@@ -712,8 +706,6 @@ def add_file_to_knowledge_by_id(
         kf = Knowledges.add_file_to_knowledge_by_id(
             knowledge_id=id, file_id=form_data.file_id, user_id=user.id, db=db
         )
-        if kf:
-            bigquery_sync_knowledge_file(kf)
     except Exception as e:
         log.debug(e)
         raise HTTPException(
@@ -1080,8 +1072,6 @@ async def add_files_to_knowledge_batch(
         kf = Knowledges.add_file_to_knowledge_by_id(
             knowledge_id=id, file_id=file_id, user_id=user.id, db=db
         )
-        if kf:
-            bigquery_sync_knowledge_file(kf)
 
     # If there were any errors, include them in the response
     if result.errors:
