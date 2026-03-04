@@ -14,7 +14,6 @@ from urllib.parse import urlparse
 
 import requests
 from pydantic import BaseModel
-from sqlalchemy import JSON, Column, DateTime, Integer, func
 from authlib.integrations.starlette_client import OAuth
 
 
@@ -34,7 +33,7 @@ from open_webui.env import (
     WEBUI_NAME,
     log,
 )
-from open_webui.internal.db import Base, get_db
+from open_webui.internal.db import Base, get_db, Config
 from open_webui.utils.redis import get_redis_connection
 
 
@@ -47,18 +46,8 @@ class EndpointFilter(logging.Filter):
 logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
 
 ####################################
-# Config helpers
+# Config helpers (Config model lives in open_webui.internal.db)
 ####################################
-
-
-class Config(Base):
-    __tablename__ = "config"
-
-    id = Column(Integer, primary_key=True)
-    data = Column(JSON, nullable=False)
-    version = Column(Integer, nullable=False, default=0)
-    created_at = Column(DateTime, nullable=False, server_default=func.now())
-    updated_at = Column(DateTime, nullable=True, onupdate=func.now())
 
 
 def load_json_config():
@@ -85,11 +74,13 @@ def reset_config():
         db.commit()
 
 
-# When initializing, check if config.json exists and migrate it to the database
-if os.path.exists(f"{DATA_DIR}/config.json"):
-    data = load_json_config()
-    save_to_db(data)
-    os.rename(f"{DATA_DIR}/config.json", f"{DATA_DIR}/old_config.json")
+def init_config_from_json():
+    """Migrate config.json into DB if present. Call after ensure_sqlalchemy_tables()."""
+    if os.path.exists(f"{DATA_DIR}/config.json"):
+        data = load_json_config()
+        save_to_db(data)
+        os.rename(f"{DATA_DIR}/config.json", f"{DATA_DIR}/old_config.json")
+
 
 DEFAULT_CONFIG = {
     "version": 0,
@@ -98,17 +89,20 @@ DEFAULT_CONFIG = {
 
 
 def get_config():
-    with get_db() as db:
-        config_entry = db.query(Config).order_by(Config.id.desc()).first()
-        return config_entry.data if config_entry else DEFAULT_CONFIG
+    global CONFIG_DATA
+    if CONFIG_DATA is None:
+        with get_db() as db:
+            config_entry = db.query(Config).order_by(Config.id.desc()).first()
+            CONFIG_DATA = config_entry.data if config_entry else DEFAULT_CONFIG
+    return CONFIG_DATA
 
 
-CONFIG_DATA = get_config()
+CONFIG_DATA = None
 
 
 def get_config_value(config_path: str):
     path_parts = config_path.split(".")
-    cur_config = CONFIG_DATA
+    cur_config = get_config()
     for key in path_parts:
         if key in cur_config:
             cur_config = cur_config[key]
@@ -192,7 +186,7 @@ class PersistentConfig(Generic[T]):
     def save(self):
         log.info(f"Saving '{self.env_name}' to the database")
         path_parts = self.config_path.split(".")
-        sub_config = CONFIG_DATA
+        sub_config = get_config()
         for key in path_parts[:-1]:
             if key not in sub_config:
                 sub_config[key] = {}

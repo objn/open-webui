@@ -18,7 +18,7 @@ from open_webui.env import (
     ENABLE_DB_MIGRATIONS,
 )
 from peewee_migrate import Router
-from sqlalchemy import Dialect, create_engine, MetaData, event, types
+from sqlalchemy import Dialect, create_engine, MetaData, event, types, Column, Integer, DateTime, func, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import scoped_session, sessionmaker, Session
 from sqlalchemy.pool import QueuePool, NullPool
@@ -150,6 +150,48 @@ SessionLocal = sessionmaker(
 metadata_obj = MetaData(schema=DATABASE_SCHEMA)
 Base = declarative_base(metadata=metadata_obj)
 ScopedSession = scoped_session(SessionLocal)
+
+
+class Config(Base):
+    """Stored in DB so create_all can run before config.py is imported."""
+    __tablename__ = "config"
+
+    id = Column(Integer, primary_key=True)
+    data = Column(JSON, nullable=False)
+    version = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    updated_at = Column(DateTime, nullable=True, onupdate=func.now())
+
+
+def ensure_sqlalchemy_tables():
+    """Create all SQLAlchemy tables if they do not exist (e.g. fresh DB)."""
+    # Import all modules that register models with Base so metadata is complete
+    from open_webui.models import (
+        access_grants,
+        auths,
+        bigquery_files,
+        channels,
+        chat_messages,
+        chats,
+        feedbacks,
+        files,
+        folders,
+        functions,
+        groups,
+        knowledge,
+        memories,
+        messages,
+        models as models_module,
+        notes,
+        oauth_sessions,
+        prompt_history,
+        prompts,
+        skills,
+        tags,
+        tools,
+        users,
+    )
+    Base.metadata.create_all(bind=engine)
 
 
 def get_session():

@@ -107,7 +107,9 @@ from open_webui.routers.retrieval import (
 
 
 from sqlalchemy.orm import Session
-from open_webui.internal.db import ScopedSession, engine, get_session
+from open_webui.internal.db import ScopedSession, engine, get_session, ensure_sqlalchemy_tables
+
+ensure_sqlalchemy_tables()
 
 from open_webui.models.functions import Functions
 from open_webui.models.models import Models
@@ -454,6 +456,7 @@ from open_webui.config import (
     AUTOCOMPLETE_GENERATION_INPUT_MAX_LENGTH,
     AppConfig,
     reset_config,
+    init_config_from_json,
 )
 from open_webui.env import (
     ENABLE_CUSTOM_MODEL_FALLBACK,
@@ -599,6 +602,8 @@ async def lifespan(app: FastAPI):
 
     app.state.instance_id = INSTANCE_ID
     start_logger()
+
+    init_config_from_json()
 
     if RESET_CONFIG_ON_START:
         reset_config()
