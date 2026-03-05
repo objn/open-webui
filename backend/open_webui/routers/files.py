@@ -53,7 +53,10 @@ from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.misc import strict_match_mime_type
 from pydantic import BaseModel
 
-from open_webui.integrations.bigquery_sync import import_structured_file_to_bigquery
+from open_webui.integrations.bigquery_sync import (
+    import_structured_file_to_bigquery,
+    generate_bq_summary_with_gemini,
+)
 from open_webui.models.bigquery_files import BigQueryFiles
 
 log = logging.getLogger(__name__)
@@ -253,6 +256,15 @@ def _import_structured_file_to_bigquery_task(
                     row_count=result.get("row_count"),
                     db=db,
                 )
+                # Generate Gemini summary from sample of 10 rows and store in bq_summary
+                summary = generate_bq_summary_with_gemini(
+                    project=result["project"],
+                    dataset=result["dataset"],
+                    table_id=result["table_id"],
+                    sample_size=10,
+                )
+                if summary:
+                    BigQueryFiles.update_bq_summary(file_id=file_id, bq_summary=summary, db=db)
             else:
                 with SessionLocal() as db_session:
                     BigQueryFiles.upsert_for_file(
@@ -264,6 +276,16 @@ def _import_structured_file_to_bigquery_task(
                         row_count=result.get("row_count"),
                         db=db_session,
                     )
+                    summary = generate_bq_summary_with_gemini(
+                        project=result["project"],
+                        dataset=result["dataset"],
+                        table_id=result["table_id"],
+                        sample_size=10,
+                    )
+                    if summary:
+                        BigQueryFiles.update_bq_summary(
+                            file_id=file_id, bq_summary=summary, db=db_session
+                        )
         except Exception as e:
             log.exception("Error importing structured file to BigQuery: %s", e)
             try:

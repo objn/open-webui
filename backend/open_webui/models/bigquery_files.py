@@ -26,6 +26,7 @@ class BigQueryFile(Base):
 
     schema = Column(JSON, nullable=True)
     row_count = Column(BigInteger, nullable=True)
+    bq_summary = Column(Text, nullable=True)
 
     created_at = Column(BigInteger, nullable=False)
     updated_at = Column(BigInteger, nullable=False)
@@ -43,6 +44,7 @@ class BigQueryFileModel(BaseModel):
 
     schema: Optional[Union[dict, List[dict]]] = None
     row_count: Optional[int] = None
+    bq_summary: Optional[str] = None
 
     created_at: int
     updated_at: int
@@ -82,6 +84,7 @@ class BigQueryFilesTable:
         table_id: str,
         schema: Optional[Union[dict, List[dict]]] = None,
         row_count: Optional[int] = None,
+        bq_summary: Optional[str] = None,
         db: Optional[Session] = None,
     ) -> Optional[BigQueryFileModel]:
         with get_db_context(db) as db:
@@ -97,6 +100,8 @@ class BigQueryFilesTable:
                         existing.schema = schema
                     if row_count is not None:
                         existing.row_count = row_count
+                    if bq_summary is not None:
+                        existing.bq_summary = bq_summary
                     existing.updated_at = now
                     db.commit()
                     db.refresh(existing)
@@ -111,6 +116,7 @@ class BigQueryFilesTable:
                     table_id=table_id,
                     schema=schema,
                     row_count=row_count,
+                    bq_summary=bq_summary,
                     created_at=now,
                     updated_at=now,
                 )
@@ -121,6 +127,26 @@ class BigQueryFilesTable:
             except Exception as e:
                 log.exception(f"Error upserting BigQueryFile: {e}")
                 return None
+
+    def update_bq_summary(
+        self,
+        file_id: str,
+        bq_summary: str,
+        db: Optional[Session] = None,
+    ) -> bool:
+        """Update only the bq_summary field for an existing bigquery_file row."""
+        with get_db_context(db) as db:
+            try:
+                row = db.query(BigQueryFile).filter_by(file_id=file_id).first()
+                if not row:
+                    return False
+                row.bq_summary = bq_summary
+                row.updated_at = int(time.time())
+                db.commit()
+                return True
+            except Exception as e:
+                log.exception(f"Error updating BigQueryFile bq_summary: {e}")
+                return False
 
 
 BigQueryFiles = BigQueryFilesTable()
