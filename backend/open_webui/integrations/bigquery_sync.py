@@ -290,7 +290,7 @@ Answer in 1–3 short sentences: What does this information likely relate to, an
             log.debug("Vertex AI SDK not available; skipping BQ summary: %s", e)
             return None
 
-        location = (os.environ.get("VERTEXAI_LOCATION") or "us-central1").strip()
+        location = (os.environ.get("VERTEXAI_LOCATION") or "asia-southeast1").strip()
         try:
             vertexai.init(project=project, location=location)
         except Exception as e:
