@@ -40,7 +40,10 @@ from open_webui.models.files import FileModel, FileUpdateForm, Files
 from open_webui.models.knowledge import Knowledges
 from open_webui.storage.provider import Storage
 from open_webui.internal.db import get_session, get_db
+from open_webui.config import DATA_DIR, GCS_BUCKET_NAME, GCS_KEY_PREFIX
 from sqlalchemy.orm import Session
+
+from open_webui.integrations.vertexai_ocr import vertexai_ocr_from_openwebui_path
 
 
 from open_webui.retrieval.vector.factory import VECTOR_DB_CLIENT
@@ -1728,7 +1731,7 @@ def process_file(
                 # Usage: /files/
                 file_path = file.path
                 if file_path:
-                    file_path = Storage.get_file(file_path)
+                    resolved_file_path = Storage.get_file(file_path)
                     loader = Loader(
                         engine=request.app.state.config.CONTENT_EXTRACTION_ENGINE,
                         user=user,
@@ -1762,7 +1765,7 @@ def process_file(
                         MINERU_PARAMS=request.app.state.config.MINERU_PARAMS,
                     )
                     docs = loader.load(
-                        file.filename, file.meta.get("content_type"), file_path
+                        file.filename, file.meta.get("content_type"), resolved_file_path
                     )
 
                     docs = [
@@ -1778,6 +1781,33 @@ def process_file(
                         )
                         for doc in docs
                     ]
+
+                    extracted_text = " ".join([d.page_content for d in docs]).strip()
+
+                    # Some extractors return Document objects with empty/whitespace-only content.
+                    # Treat that as extraction failure and fall back to OCR.
+                    if len(docs) == 0 or not extracted_text:
+                        ocr_text = vertexai_ocr_from_openwebui_path(
+                            file_path,
+                            data_dir=os.fspath(DATA_DIR),
+                            gcs_bucket=GCS_BUCKET_NAME,
+                            gcs_key_prefix=GCS_KEY_PREFIX,
+                        )
+                        if not ocr_text.strip():
+                            raise ValueError(ERROR_MESSAGES.EMPTY_CONTENT)
+
+                        docs = [
+                            Document(
+                                page_content=ocr_text,
+                                metadata={
+                                    **file.meta,
+                                    "name": file.filename,
+                                    "created_by": file.user_id,
+                                    "file_id": file.id,
+                                    "source": file.filename,
+                                },
+                            )
+                        ]
                 else:
                     docs = [
                         Document(
