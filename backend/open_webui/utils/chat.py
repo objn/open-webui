@@ -23,6 +23,8 @@ from open_webui.socket.main import (
 )
 from open_webui.functions import generate_function_chat_completion
 
+from open_webui.utils.debug_chat import log_chat
+
 from open_webui.routers.openai import (
     generate_chat_completion as generate_openai_chat_completion,
 )
@@ -163,6 +165,7 @@ async def generate_chat_completion(
     bypass_system_prompt: bool = False,
 ):
     log.debug(f"generate_chat_completion: {form_data}")
+    log_chat("generate_chat_completion", "request", form_data)
     if BYPASS_MODEL_ACCESS_CONTROL:
         bypass_filter = True
 
@@ -259,12 +262,14 @@ async def generate_chat_completion(
 
         if model.get("pipe"):
             # Below does not require bypass_filter because this is the only route the uses this function and it is already bypassing the filter
+            log_chat("generate_function_chat_completion", "request", form_data)
             return await generate_function_chat_completion(
                 request, form_data, user=user, models=models
             )
         if model.get("owned_by") == "ollama":
             # Using /ollama/api/chat endpoint
             form_data = convert_payload_openai_to_ollama(form_data)
+            log_chat("generate_ollama_chat_completion", "request", form_data)
             response = await generate_ollama_chat_completion(
                 request=request,
                 form_data=form_data,
@@ -272,6 +277,7 @@ async def generate_chat_completion(
                 bypass_filter=bypass_filter,
                 bypass_system_prompt=bypass_system_prompt,
             )
+            log_chat("generate_ollama_chat_completion", "response", {"stream": bool(form_data.get("stream"))})
             if form_data.get("stream"):
                 response.headers["content-type"] = "text/event-stream"
                 return StreamingResponse(
@@ -282,6 +288,7 @@ async def generate_chat_completion(
             else:
                 return convert_response_ollama_to_openai(response)
         else:
+            log_chat("generate_openai_chat_completion", "request", form_data)
             return await generate_openai_chat_completion(
                 request=request,
                 form_data=form_data,

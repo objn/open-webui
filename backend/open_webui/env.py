@@ -629,6 +629,8 @@ else:
 # CHAT
 ####################################
 
+DEBUG_CHAT = os.environ.get("DEBUG_CHAT", "False").lower() == "true"
+
 ENABLE_CHAT_RESPONSE_BASE64_IMAGE_URL_CONVERSION = (
     os.environ.get("ENABLE_CHAT_RESPONSE_BASE64_IMAGE_URL_CONVERSION", "False").lower()
     == "true"

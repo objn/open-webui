@@ -21,6 +21,7 @@ from open_webui.utils.headers import include_user_info_headers
 from open_webui.models.chats import Chats
 from open_webui.models.users import UserModel
 
+from open_webui.utils.debug_chat import log_chat
 from open_webui.env import (
     ENABLE_FORWARD_USER_INFO_HEADERS,
     FORWARD_SESSION_INFO_HEADER_CHAT_ID,
@@ -114,6 +115,7 @@ async def send_post_request(
     user: UserModel = None,
     metadata: Optional[dict] = None,
 ):
+    log_chat("ollama.send_post_request", "request", {"url": url, "stream": stream, "payload": json.loads(payload) if isinstance(payload, (str, bytes)) else payload})
 
     r = None
     streaming = False
@@ -162,6 +164,7 @@ async def send_post_request(
                 response_headers["Content-Type"] = content_type
 
             streaming = True
+            log_chat("ollama.send_post_request", "response", {"status": r.status, "streaming": True})
             return StreamingResponse(
                 stream_wrapper(r, session),
                 status_code=r.status,
@@ -169,6 +172,7 @@ async def send_post_request(
             )
         else:
             res = await r.json()
+            log_chat("ollama.send_post_request", "response", {"status": r.status, "body": res})
             return res
 
     except HTTPException as e:

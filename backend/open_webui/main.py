@@ -117,6 +117,8 @@ from open_webui.models.functions import Functions
 from open_webui.models.models import Models
 from open_webui.models.users import UserModel, Users
 from open_webui.models.chats import Chats
+from open_webui.models.knowledge import Knowledges
+from open_webui.models.bigquery_files import BigQueryFiles
 
 from open_webui.config import (
     # Ollama
@@ -516,6 +518,7 @@ from open_webui.utils.chat import (
     generate_chat_completion as chat_completion_handler,
     chat_completed as chat_completed_handler,
 )
+from open_webui.utils.debug_chat import log_chat
 from open_webui.utils.actions import chat_action as chat_action_handler
 from open_webui.utils.embeddings import generate_embeddings
 from open_webui.utils.middleware import (
@@ -1647,6 +1650,8 @@ async def chat_completion(
     form_data: dict,
     user=Depends(get_verified_user),
 ):
+    log_chat("chat_completion", "request", form_data)
+
     if not request.app.state.MODELS:
         await get_all_models(request, user=user)
 
@@ -1718,6 +1723,27 @@ async def chat_completion(
         if model_info_params.get("reasoning_tags") is not None:
             reasoning_tags = model_info_params.get("reasoning_tags")
 
+        # map BigQuery to files
+        get_file_in_collection = form_data.get("files", None)
+        if get_file_in_collection:
+            for collection_file in get_file_in_collection:
+                if collection_file.get("type") == "collection":
+                    knowledge_id = collection_file.get("id")
+                    file_records = Knowledges.get_files_by_id(knowledge_id)
+                    if file_records:
+                        bq_tables = []
+                        for file_record in file_records:
+                            if file_record.is_structured:
+                                bq_file = BigQueryFiles.get_by_file_id(file_record.id)
+                                if bq_file:
+                                    bq_tables.append({
+                                        "table_id": bq_file.table_id,
+                                        "project": bq_file.project,
+                                        "dataset": bq_file.dataset,
+                                        "bq_summary": bq_file.bq_summary,
+                                    })
+                        if bq_tables:
+                            collection_file["files_bq_table"] = bq_tables
         metadata = {
             "user_id": user.id,
             "chat_id": form_data.pop("chat_id", None),

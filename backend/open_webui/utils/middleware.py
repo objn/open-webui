@@ -74,6 +74,7 @@ from open_webui.retrieval.utils import get_sources_from_items
 
 
 from open_webui.utils.sanitize import sanitize_code
+from open_webui.utils.debug_chat import log_chat
 from open_webui.utils.chat import generate_chat_completion
 from open_webui.utils.task import (
     get_task_model_id,
@@ -1965,6 +1966,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     # Pipeline Inlet -> Filter Inlet -> Chat Memory -> Chat Web Search -> Chat Image Generation
     # -> Chat Code Interpreter (Form Data Update) -> (Default) Chat Tools Function Calling
     # -> Chat Files
+    log_chat("process_chat_payload", "request", form_data)
 
     form_data = apply_params_to_form_data(form_data, model)
     log.debug(f"form_data: {form_data}")
@@ -2009,6 +2011,14 @@ async def process_chat_payload(request, form_data, user, metadata, model):
 
     # Process messages with OR-aligned output items for clean LLM messages
     form_data["messages"] = process_messages_with_output(form_data.get("messages", []))
+
+    # Keep user-only messages separately for downstream (e.g., special RAG/pipelines)
+    only_usermessage = []
+    for m in form_data.get("messages", []):
+        if isinstance(m, dict) and m.get("role") == "user":
+            only_usermessage.append({k: v for k, v in m.items() if k in ("role", "content")})
+    metadata["only_usermessage"] = only_usermessage
+    form_data["metadata"] = metadata
 
     system_message = get_system_message(form_data.get("messages", []))
     if system_message:  # Chat Controls/User Settings
@@ -4537,8 +4547,19 @@ async def streaming_chat_response_handler(response, ctx):
 
 
 async def process_chat_response(response, ctx):
+    is_streaming = isinstance(response, StreamingResponse)
+    log_chat(
+        "process_chat_response",
+        "response",
+        {
+            "streaming": is_streaming,
+            "content_type": response.headers.get("Content-Type", "") if is_streaming else "(non-streaming)",
+            "model": ctx.get("form_data", {}).get("model", ""),
+        },
+    )
+
     # Non-streaming response
-    if not isinstance(response, StreamingResponse):
+    if not is_streaming:
         return await non_streaming_chat_response_handler(response, ctx)
 
     # Non standard response

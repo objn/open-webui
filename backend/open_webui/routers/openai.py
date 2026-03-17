@@ -30,6 +30,7 @@ from open_webui.models.groups import Groups
 from open_webui.config import (
     CACHE_DIR,
 )
+from open_webui.utils.debug_chat import log_chat
 from open_webui.env import (
     MODELS_CACHE_TTL,
     AIOHTTP_CLIENT_SESSION_SSL,
@@ -59,6 +60,36 @@ from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.headers import include_user_info_headers
 
 log = logging.getLogger(__name__)
+
+def _extract_files_bq_table(metadata: Optional[dict]) -> list[dict]:
+    """
+    Extract BigQuery table mappings (files_bq_table) from chat metadata.
+
+    Expected shape (from main.py mapping):
+    metadata["files"] -> list[
+        { "type": "collection", ..., "files_bq_table": [ {table_id, project, dataset, bq_summary}, ... ] },
+        ...
+    ]
+    """
+    if not metadata or not isinstance(metadata, dict):
+        return []
+
+    files = metadata.get("files")
+    if not isinstance(files, list):
+        return []
+
+    out: list[dict] = []
+    for item in files:
+        if not isinstance(item, dict):
+            continue
+        tables = item.get("files_bq_table")
+        if not isinstance(tables, list):
+            continue
+        for t in tables:
+            if isinstance(t, dict):
+                out.append(t)
+
+    return out
 
 
 ##########################################
@@ -1024,12 +1055,31 @@ async def generate_chat_completion(
 
     # Add user info to the payload if the model is a pipeline
     if "pipeline" in model and model.get("pipeline"):
-        payload["user"] = {
+        existing_user = payload.get("user") if isinstance(payload.get("user"), dict) else {}
+        user_payload = {
             "name": user.name,
             "id": user.id,
             "email": user.email,
             "role": user.role,
         }
+        # Preserve/merge any existing user fields (if present)
+        user_payload = {**user_payload, **existing_user}
+
+        # Attach BigQuery table mappings (if any) for downstream pipelines
+        files_bq_table = _extract_files_bq_table(metadata)
+        if files_bq_table:
+            user_payload["analysis_bq"] = True
+            attach = (
+                user_payload.get("attach")
+                if isinstance(user_payload.get("attach"), dict)
+                else {}
+            )
+            attach["files_bq_table"] = files_bq_table
+            if metadata and metadata.get("only_usermessage") is not None:
+                attach["only_usermessage"] = metadata.get("only_usermessage")
+            user_payload["attach"] = attach
+
+        payload["user"] = user_payload
 
     url = request.app.state.config.OPENAI_API_BASE_URLS[idx]
     key = request.app.state.config.OPENAI_API_KEYS[idx]
@@ -1082,6 +1132,8 @@ async def generate_chat_completion(
         else:
             request_url = f"{url}/chat/completions"
 
+    log_chat("openai.generate_chat_completion", "request", {"url": request_url, "payload": json.loads(payload) if isinstance(payload, str) else payload})
+
     payload = json.dumps(payload)
 
     r = None
@@ -1106,6 +1158,7 @@ async def generate_chat_completion(
         # Check if response is SSE
         if "text/event-stream" in r.headers.get("Content-Type", ""):
             streaming = True
+            log_chat("openai.generate_chat_completion", "response", {"status": r.status, "streaming": True})
             return StreamingResponse(
                 stream_wrapper(r, session, stream_chunks_handler),
                 status_code=r.status,
@@ -1117,6 +1170,8 @@ async def generate_chat_completion(
             except Exception as e:
                 log.error(e)
                 response = await r.text()
+
+            log_chat("openai.generate_chat_completion", "response", {"status": r.status, "body": response})
 
             if r.status >= 400:
                 if isinstance(response, (dict, list)):
