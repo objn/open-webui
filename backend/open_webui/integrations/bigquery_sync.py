@@ -18,7 +18,6 @@ from open_webui.config import (
     BIGQUERY_GCS_IMPORT_BUCKET,
     BIGQUERY_GCS_IMPORT_PREFIX,
     GCS_BUCKET_NAME,
-    GEMINI_API_KEY,
 )
 
 log = logging.getLogger(__name__)
@@ -254,10 +253,6 @@ def generate_bq_summary_with_gemini(
     a short summary: what the information likely relates to and what it contains.
     Returns the summary text, or None if disabled/failed.
     """
-    if not GEMINI_API_KEY or not GEMINI_API_KEY.strip():
-        log.debug("GEMINI_API_KEY not set; skipping BQ summary")
-        return None
-
     client = _get_client()
     if client is None:
         return None
@@ -286,17 +281,30 @@ Sample data (JSON):
 {sample_str}
 
 Answer in 1–3 short sentences: What does this information likely relate to, and what does it contain?"""
+        # Use Vertex AI (ADC/service account) so no API key is required.
+        # Requires the runtime to have Application Default Credentials.
+        try:
+            import vertexai
+            from vertexai.generative_models import GenerativeModel
+        except Exception as e:
+            log.debug("Vertex AI SDK not available; skipping BQ summary: %s", e)
+            return None
 
-        from google import genai
+        location = (os.environ.get("VERTEXAI_LOCATION") or "us-central1").strip()
+        try:
+            vertexai.init(project=project, location=location)
+        except Exception as e:
+            log.debug("Vertex AI init failed; skipping BQ summary: %s", e)
+            return None
 
-        genai_client = genai.Client(api_key=GEMINI_API_KEY.strip())
-        response = genai_client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-        )
-        if response and response.text:
-            return response.text.strip()
-        return None
+        try:
+            model = GenerativeModel("gemini-2.5-flash")
+            response = model.generate_content(prompt)
+            text = getattr(response, "text", None)
+            return text.strip() if text else None
+        except Exception as e:
+            log.exception("Vertex AI Gemini summary failed: %s", e)
+            return None
     except Exception as e:
         log.exception("BigQuery Gemini summary failed: %s", e)
         return None
