@@ -452,8 +452,8 @@
 				</div>
 			{/if}
 
-			<div class="flex self-center flex-1 w-full min-w-0">
-				<div dir="auto" class="text-left self-center overflow-hidden w-full h-[20px] truncate">
+			<div class="flex self-center flex-1 w-full min-w-0" >
+				<div dir="auto" class="text-left self-center overflow-hidden w-full h-[20px] truncate" id="side-btn-title" >
 					{title}
 				</div>
 			</div>

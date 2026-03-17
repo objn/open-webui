@@ -1,5 +1,3 @@
-
-
 .siampiwat #splash-screen {
     background-color: #382A4B;
 }
@@ -16,10 +14,11 @@
     color: #B39A56;
 }
 
-.siampiwat .bg-gray-700\/5.hover\:bg-gray-700\/10.dark\:bg-gray-100\/5.dark\:hover\:bg-gray-100\/10.dark\:text-gray-300.dark\:hover\:text-white.transition.w-full.rounded-full.font-medium.text-sm.py-2\.5{
+.siampiwat .bg-gray-700\/5.hover\:bg-gray-700\/10.dark\:bg-gray-100\/5.dark\:hover\:bg-gray-100\/10.dark\:text-gray-300.dark\:hover\:text-white.transition.w-full.rounded-full.font-medium.text-sm.py-2\.5 {
     background-color: #382A4B;
     color: #ffffff;
 }
+
 .siampiwat .bg-white {
     background-color: #F8F6F0;
 }
@@ -31,6 +30,7 @@
 .siampiwat .w-full.px-4.py-3.bg-white.dark\:shadow-lg.dark\:bg-gray-850.z-40.pointer-events-auto.overflow-y-auto.scrollbar-hidden {
     background-color: #382A4B;
 }
+
 .siampiwat svg {
     color: #B39A56;
 }
@@ -39,9 +39,14 @@
     background-color: #ffffff;
 }
 
+.siampiwat .w-full.h-full.text-sm.outline-none.resize-none.px-3.py-2 {
+    background-color: #F8F6F0;
+}
+
 .siampiwat .text-3xl.\@sm\:text-3xl.line-clamp-1.flex.items-center {
     color: #B39A56;
 }
+
 .siampiwat #sidebar {
     background-color: #382A4B;
 }
@@ -88,7 +93,7 @@
     background: #382A4B;
 }
 
-.siampiwat .bg-black.text-white.hover\:bg-gray-900.dark\:bg-white.dark\:text-black.dark\:hover\:bg-gray-100.transition.rounded-full.p-1\.5.self-center{
+.siampiwat .bg-black.text-white.hover\:bg-gray-900.dark\:bg-white.dark\:text-black.dark\:hover\:bg-gray-100.transition.rounded-full.p-1\.5.self-center {
     background: #382A4B;
 }
 
@@ -116,7 +121,10 @@
     color: #ffffff;
 }
 
-.siampiwat #sidebar-new-chat-button:hover, #sidebar-search-button:hover, #sidebar-notes-button:hover, #sidebar-workspace-button:hover {
+.siampiwat #sidebar-new-chat-button:hover,
+#sidebar-search-button:hover,
+#sidebar-notes-button:hover,
+#sidebar-workspace-button:hover {
     background-color: rgba(255, 255, 255, 0.15);
 }
 
@@ -161,7 +169,7 @@
     color: #B39A56;
 }
 
-.siampiwat #models .text-xs.font-medium.mb-2  {
+.siampiwat #models .text-xs.font-medium.mb-2 {
     color: #B39A56;
 }
 
@@ -179,4 +187,104 @@
 
 .siampiwat .placeholder-gray-400 {
     color: #ffffff;
+}
+
+.siampiwat .flex-1.text-lg.line-clamp-1 {
+    color: #B39A56;
+}
+
+.siampiwat .shrink-0.flex.items-center.p-2 {
+    background-color: #382A4B;
+    color: #B39A56;
+}
+
+/* .siampiwat .flex-1.flex.flex-col.overflow-y-auto.scrollbar-hidden {
+    background-color: #F8F6F0;
+} */
+
+
+.siampiwat #side-btn-title {
+    color: #F8F6F0;
+}
+
+.siampiwat #sidebar-chat-item {
+    color: #382A4B;
+}
+
+.siampiwat #sidebar-chat-item:active {
+    color: #382A4B;
+}
+
+.siampiwat #sidebar-chat-group:hover #sidebar-chat-item {
+    color: #382A4B !important;
+    background-color: rgba(255, 0, 0, 0.15) !important;
+}
+
+.siampiwat #sidebar-chat-item.selected {
+    /* Remove default background and add only a border */
+    background-color: transparent !important;
+    border: 1.5px solid rgba(255, 0, 0, 0.315);
+}
+
+.siampiwat #sidebar-chat-item-menu.selected,
+.siampiwat #sidebar-chat-group:hover #sidebar-chat-item-menu {
+    /* Remove the background gradient from the menu when selected or hovered */
+    background-image: none !important;
+    background-color: transparent !important;
+}
+
+/* Target buttons inside the Chat Menu to keep them transparent on hover */
+.siampiwat #sidebar-chat-item-menu button:hover {
+    background-color: transparent !important;
+    color: #B39A56 !important;
+}
+
+/* Theme the User Message Bubble */
+.siampiwat .chat-user .rounded-3xl {
+    /* Set the background to a solid dark purple and text to white */
+    background-color: #382A4B !important;
+    color: #ffffff !important;
+}
+/* Theme Knowledge Base List Page */
+.siampiwat #collection-container .bg-white.dark\:bg-gray-900 {
+    background-color: rgba(64, 52, 81, 0.10) !important;
+    border-color: rgba(64, 52, 81, 0.2) !important;
+}
+
+/* Theme search bar inside Knowledge Base */
+.siampiwat #collection-container input[placeholder="Search Collection"] {
+    color: #B39A56 !important;
+}
+.siampiwat #collection-container input[placeholder="Search Collection"]::placeholder {
+    color: #B39A56 !important;
+    opacity: 0.7;
+}
+
+/* Theme Knowledge Base Item Dropdowns */
+.siampiwat #collection-container .bg-gray-50.dark\:bg-gray-850 {
+    background-color: rgba(64, 52, 81, 0.10) !important;
+    color: #B39A56 !important;
+}
+
+/* Theme Add Content / Access Buttons */
+.siampiwat #collection-container button.bg-gray-50.hover\:bg-gray-100 {
+    background-color: #382A4B !important;
+    color: #ffffff !important;
+}
+.siampiwat #collection-container button.bg-gray-50.hover\:bg-gray-100:hover {
+    background-color: rgba(64, 52, 81, 0.8) !important;
+}
+
+/* Theme Title & Description Inputs */
+.siampiwat #collection-container input[placeholder*="Knowledge Name"] {
+    color: #B39A56 !important;
+}
+.siampiwat #collection-container input[placeholder*="Knowledge Description"] {
+    color: rgba(179, 154, 86, 0.8) !important;
+}
+
+/* Theme right-hand Selected File content drawer */
+.siampiwat #collection-container textarea {
+    background-color: #F8F6F0 !important;
+    color: #382A4B !important;
 }
