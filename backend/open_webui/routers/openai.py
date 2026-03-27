@@ -1079,6 +1079,9 @@ async def generate_chat_completion(
                 attach["only_usermessage"] = metadata.get("only_usermessage")
             user_payload["attach"] = attach
 
+        #add Chat ID to the payload
+        payload["chat_id"] = metadata.get("chat_id")
+        
         payload["user"] = user_payload
 
     url = request.app.state.config.OPENAI_API_BASE_URLS[idx]
